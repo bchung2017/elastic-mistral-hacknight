@@ -39,6 +39,13 @@ Dropped: the autonomous ETL agent (mapping generation, self-repair, catalog). Da
 1. `python smoke_test.py`: Elasticsearch reachable, Mistral import path (`mistralai.client` vs `mistralai`), embed dims, squirrel row count.
 2. `python es_checks.py`: `vectorValue` on `index: false`, `null` param, Painless = numpy on the real cluster, latency at 5k docs. If any line fails, stop and fix before building.
 
+## Status
+
+- `smoke_test.py` and `es_checks.py` pass on the cluster (mistralai.client import OK, dims 1024, 809 squirrel stories with a note; Painless = numpy to ~1e-7, top-10 sets match, 0.4–1.2 s at 5k docs).
+- `engine.py ingest|query` built: 809 docs, mean pairwise cosine 0.784 raw -> 0.000 centered (MATH.md §1 anisotropy confirmed for mistral-embed). One `_msearch` of keyword `must_not` vs. quantum `script_score`, side-by-side tables.
+- ES 9 omits dense_vector from `_source`, so the corpus mean is stored in a non-vector `mu` float field.
+- Not done: leak@10 / keep@10 eval (MATH.md §9), paraphrase subspaces, order-effect demo.
+
 ## Open (to fill in while building, not before)
 
 - Squirrel stories row count and which text field gets embedded
