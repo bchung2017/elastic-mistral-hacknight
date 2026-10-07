@@ -31,7 +31,6 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/
 #brand{display:flex;align-items:center;gap:12px;height:100%;padding:0 16px 0 14px;border-right:1px solid var(--line);margin-right:4px}
 #brand .mark{width:22px;height:22px;background:var(--rainbow-v);image-rendering:pixelated;clip-path:polygon(0 0,100% 0,100% 100%,0 100%);box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
 #brand h1{font-size:14px;margin:0;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
-#brand h1 small{display:block;font-size:9.5px;letter-spacing:.18em;color:var(--mute);font-weight:400;margin-top:1px}
 button,select,input{font:inherit;color:var(--text)}
 button{background:transparent;border:1px solid var(--line);border-radius:var(--r);padding:6px 12px;cursor:pointer;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700}
 button:hover{border-color:var(--text)}
@@ -100,8 +99,6 @@ button.primary{background:var(--m-od);border-color:var(--m-od);color:#fff}
 #cf input::placeholder{color:var(--mute)}
 #cf:focus-within{border-color:var(--m-ye)}
 #go{background:var(--m-od);border-color:var(--m-od);color:#fff;border-radius:var(--r);padding:4px 14px;font-size:14px}
-#tagline{text-align:center;color:var(--mute);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-top:12px}
-#chat:not(.empty) #tagline{display:none}
 #steps{display:grid;gap:2px;margin-bottom:8px;font-size:11.5px;color:var(--mute);background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:var(--r);padding:4px 0}
 #steps:empty{display:none}
 #steps .st{display:grid;grid-template-columns:16px 78px 1fr;gap:6px;padding:3px 10px;align-items:baseline}
@@ -121,22 +118,21 @@ button.primary{background:var(--m-od);border-color:var(--m-od);color:#fff}
 </head>
 <body>
 <div id="bar">
-  <div id="brand"><div class="mark"></div><h1>Quantum NYC Brain<small>quantum logic · elastic × mistral</small></h1></div>
+  <div id="brand"><div class="mark"></div><h1>Quantum NYC Brain</h1></div>
   <span style="flex:1"></span>
   <button id="copy">Copy grammar JSON</button>
   <button id="gear" aria-label="backend settings">Backends</button>
 </div>
 <div id="settings" hidden>
   <label>Parse endpoint <input id="pep" class="mono" placeholder="POST {query} → {positive?, not[], any_of[]}"></label>
-  <label>Search endpoint <input id="ep" class="mono" placeholder="POST grammar → ranked records"></label>
-  <small>Both empty: built-in heuristic parser and demo embeddings (no Mistral, no Elasticsearch).</small>
+  <label>Search endpoint <input id="ep" class="mono" placeholder="POST grammar → engine.search()"></label>
+  <small>Served by server.py: /query is set automatically. Empty = local synthetic vectors / heuristic parser.</small>
 </div>
 
 <div id="view"><div id="world"><svg id="edges"></svg></div></div>
 <div id="chat" class="empty">
   <div id="steps" class="mono"></div>
   <form id="cf" autocomplete="off"><input id="q" placeholder="Ask the city…  e.g. rats but not restaurants" aria-label="query"><button id="go" type="button" aria-label="send">↵</button></form>
-  <div id="tagline">negation as orthogonal complement · one _msearch · ranked records</div>
 </div>
 <div id="toast"></div>
 
@@ -280,7 +276,7 @@ function mountQuery(n){
 }
 function mountResults(n){
   const el=document.createElement('div');el.className='node results';n.el=el;
-  el.innerHTML=`<div class="hd"><span>Ranked records</span><span class="tag">one _msearch</span></div>
+  el.innerHTML=`<div class="hd"><span>Ranked records</span><span class="tag mode">SYNTHETIC VECTORS · local demo</span></div>
   <div class="cols"><div class="col b"><h4>Keyword baseline <small>match + must_not</small></h4><div class="rows"></div></div>
   <div class="col q"><h4>Quantum logic <small>script_score, 1 + s</small></h4><div class="rows"></div></div></div><div class="foot mono"></div>`;
   placeNode(n);world.appendChild(el);header(el,n);
@@ -506,18 +502,25 @@ async function runQuery(text){
     const qs=document.querySelector('.query .stats').innerText.split('\n').filter(Boolean);
     s.done(g.not.length?`NOT subspace removed; ${qs.find(x=>x.startsWith('q·r'))||''}`:'no negation; raw d·q');
     s=step('Retrieve','script_score, exact, one _msearch with must_not baseline');
-    R.el.classList.remove('dim');fit();await sleep(400);
+    R.el.classList.remove('dim');setMode(false);fit();await sleep(400);
     const sep=document.getElementById('ep').value.trim();
-    if(sep){try{await backendSearch(sep,grammar())}catch(e){toast('Search endpoint failed: '+e.message)}}
-    s.done(sep?'ranked records from backend (quantum column)':'ranked records (demo corpus, local scoring)');
+    let live=false;if(sep){try{await backendSearch(sep,grammar());live=true}catch(e){toast('Search endpoint failed, showing local demo: '+e.message)}}
+    s.done(live?'LIVE: both columns from server.py /query':'ranked records (demo corpus, synthetic vectors)');
   }catch(e){const f=stepsEl.querySelector('.st:not(.done):not(.fail)');f?f.className='st fail':0;toast('Pipeline error: '+e.message)}
   finally{busy=false;document.getElementById('go').disabled=false;qIn.focus()}
 }
 async function backendSearch(ep,g){
   const r=await fetch(ep,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(g)});
-  const j=await r.json();const hits=j.hits||j.records||j;
-  nodes.find(n=>n.kind==="results").el.querySelector('.col.q .rows').innerHTML=(Array.isArray(hits)?hits:[]).slice(0,8).map((h,i)=>`<div class="row"><span class="n mono">${i+1}</span><span>${h.text||h.note||h._source?.note||JSON.stringify(h)}</span><span class="sc mono">${(h.score??h._score??0).toFixed(2)}</span></div>`).join('')||'<div style="padding:6px;color:var(--mute)">empty</div>';
+  const j=await r.json();if(j.error)throw new Error(j.error);
+  // server.py returns {keyword:[{note,score}], quantum:[...], overlap, took}; a bare list still fills the quantum column
+  const R=nodes.find(n=>n.kind==="results").el,esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const render=(sel,hits)=>{R.querySelector(sel+' .rows').innerHTML=(Array.isArray(hits)?hits:[]).slice(0,8).map((h,i)=>`<div class="row"><span class="n mono">${i+1}</span><span>${esc(h.note??h.text??JSON.stringify(h))}</span><span class="sc mono">${(+(h.score??h._score??0)).toFixed(2)}</span></div>`).join('')||'<div style="padding:6px;color:var(--mute)">empty</div>'};
+  if(j.quantum){render('.col.b',j.keyword);render('.col.q',j.quantum)}else render('.col.q',j.hits||j.records||j);
+  const ov=Object.entries(j.overlap||{}).map(([k,v])=>`q·r[${esc(k)}] = <em>${(+v).toFixed(2)}</em>`).join(' · ');
+  R.querySelector('.foot').innerHTML=`<span><em>LIVE</em>: mistral-embed + Elasticsearch _msearch${j.took!=null?` · ${j.took} ms`:''}</span>${ov?`<span>${ov}</span>`:''}`;
+  setMode(true);return j;
 }
+function setMode(live){const t=document.querySelector('.results .tag.mode');t.textContent=live?'LIVE · mistral-embed · one _msearch':'SYNTHETIC VECTORS · local demo';t.style.background=live?'var(--a-lime)':'var(--m-ol)'}
 const submitQ=()=>{const t=qIn.value.trim();if(t){runQuery(t);qIn.value=''}};
 document.getElementById('cf').addEventListener('submit',e=>e.preventDefault());
 qIn.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();submitQ()}});
@@ -529,6 +532,7 @@ buildCorpus();
 const Qn={id:nid++,kind:"query",x:380,y:30},Rn={id:nid++,kind:"results",x:780,y:30};
 nodes.push(Qn,Rn);mountQuery(Qn);mountResults(Rn);
 Qn.el.classList.add('hidden');Rn.el.classList.add('hidden');
+if(location.protocol.startsWith('http'))document.getElementById('ep').value='/query';
 applyView();qIn.focus();
 </script>
 </body>
