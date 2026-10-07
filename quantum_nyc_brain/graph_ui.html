@@ -38,7 +38,8 @@ button{font-family:var(--f-display);background:transparent;border:1px solid var(
 button:hover{border-color:var(--text)}
 button.primary{background:var(--m-od);border-color:var(--m-od);color:#fff}
 #ep{width:210px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:5px 8px}
-#view{position:fixed;inset:50px 0 0 0;cursor:grab;
+#bg{position:fixed;inset:50px 0 0 0;width:100%;height:calc(100% - 50px);pointer-events:none;z-index:0}
+#view{position:fixed;inset:50px 0 0 0;cursor:grab;z-index:1;
   background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px),radial-gradient(ellipse at 50% 0%,rgba(93,164,220,.10),transparent 60%);background-size:24px 24px,100% 100%}
 #view.pan{cursor:grabbing}
 #world{position:absolute;left:0;top:0;transform-origin:0 0}
@@ -131,6 +132,7 @@ button.primary{background:var(--m-od);border-color:var(--m-od);color:#fff}
   <small>Served by server.py: /query is set automatically. Empty = local synthetic vectors / heuristic parser.</small>
 </div>
 
+<canvas id="bg" aria-hidden="true"></canvas>
 <div id="view"><div id="world"><svg id="edges"></svg></div></div>
 <div id="chat" class="empty">
   <div id="steps"></div>
@@ -528,6 +530,76 @@ document.getElementById('cf').addEventListener('submit',e=>e.preventDefault());
 qIn.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();submitQ()}});
 document.getElementById('go').addEventListener('click',e=>{e.preventDefault();submitQ()});
 document.getElementById('gear').onclick=()=>{const p=document.getElementById('settings');p.hidden=!p.hidden};
+
+
+/* ---------- ambient background: point-cloud brain over a Manhattan outline ---------- */
+(function(){
+  const cv=document.getElementById('bg'),ctx=cv.getContext('2d');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const R=rng(7);
+  // Manhattan silhouette, normalized: x east (0..1), y north (0..1), rough but recognizable
+  const ISLAND=[[.30,.02],[.36,.00],[.44,.03],[.50,.10],[.52,.20],[.50,.30],[.49,.42],[.52,.52],[.60,.62],[.68,.74],[.72,.86],[.66,.97],[.56,1.0],[.46,.97],[.40,.86],[.36,.72],[.34,.58],[.33,.44],[.34,.30],[.32,.16]];
+  const inPoly=(x,y)=>{let c=false;for(let i=0,j=ISLAND.length-1;i<ISLAND.length;j=i++){const[xi,yi]=ISLAND[i],[xj,yj]=ISLAND[j];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c}return c};
+  // street grid points (Manhattan grid is ~29° off true north)
+  const TH=29*Math.PI/180,ct=Math.cos(TH),st=Math.sin(TH);
+  const city=[];
+  for(let a=-1.2;a<=1.2;a+=.028)for(let b=-1.2;b<=1.2;b+=.012){
+    const x=.5+a*ct-b*st,y=.5+a*st+b*ct;if(x<0||x>1||y<0||y>1||!inPoly(x,y))continue;
+    city.push({x:(x-.5)*2.2,z:(y-.5)*5.2,lit:R()<.035});
+  }
+  const outline=ISLAND.map(([x,y])=>({x:(x-.5)*2.2,z:(y-.5)*5.2}));
+  // brain: two hemispheres, radial ripple for gyri
+  const brain=[];
+  for(let i=0;i<4200;i++){
+    const u=R()*2*Math.PI,v=Math.acos(2*R()-1),s=Math.sin(v);
+    let x=s*Math.cos(u),y=Math.cos(v),z=s*Math.sin(u);
+    const rr=1+.05*Math.sin(7*u+3*v)+.04*Math.sin(5*v-4*u)+.03*Math.cos(11*x+9*z);
+    x*=1.0*rr;y*=.78*rr;z*=1.25*rr;
+    if(Math.abs(x)<.06)continue;                       // longitudinal fissure
+    x+=Math.sign(x)*.05;y+=.05*Math.sin(3*z);           // slight slope toward the cerebellum
+    brain.push({x,y,z});
+  }
+  let W,H,t0=performance.now(),last=0,running=true;
+  function size(){const d=Math.min(devicePixelRatio||1,2);W=cv.clientWidth;H=cv.clientHeight;cv.width=W*d;cv.height=H*d;ctx.setTransform(d,0,0,d,0,0)}
+  addEventListener('resize',size);size();
+  const ORANGE='255,130,5',SKY='93,164,220',PINK='215,104,157',LINE='120,150,200';
+  function frame(now){
+    if(!running)return;requestAnimationFrame(frame);
+    if(now-last<33)return;last=now;
+    const t=reduce?0:(now-t0)/1000;
+    const dim=document.getElementById('chat').classList.contains('empty')?1:.55;
+    ctx.clearRect(0,0,W,H);
+    const cx=W*.5,cy=H*.40,F=Math.min(W,H)*1.35;
+    const ry=t*.045,cosy=Math.cos(ry),siny=Math.sin(ry),tilt=.62,cosx=Math.cos(tilt),sinx=Math.sin(tilt);
+    const proj=(x,y,z)=>{const X=x*cosy-z*siny,Z=x*siny+z*cosy;const Y=y*cosx-Z*sinx,Z2=y*sinx+Z*cosx+6.2;const k=F/Z2;return[cx+X*k,cy+Y*k,k,Z2]};
+    // island, sitting on y=+1.15 (below the brain)
+    const gy=1.25,sc=.62;
+    ctx.beginPath();outline.forEach((p,i)=>{const[sx,sy]=proj(p.x*sc,gy,p.z*sc);i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy)});ctx.closePath();
+    ctx.strokeStyle=`rgba(${LINE},${.35*dim})`;ctx.lineWidth=1;ctx.stroke();
+    for(const p of city){const[sx,sy,k]=proj(p.x*sc,gy,p.z*sc);
+      if(p.lit){const f=.6+.4*Math.sin(t*.8+p.x*7+p.z*3);ctx.fillStyle=`rgba(${ORANGE},${.7*f*dim})`;ctx.fillRect(sx-1,sy-1,2.4,2.4)}
+      else{ctx.fillStyle=`rgba(${LINE},${.26*dim})`;ctx.fillRect(sx,sy,1.2,1.2)}}
+    // cutting plane through the brain: the "NOT" hyperplane, slowly nodding
+    const nod=.18*Math.sin(t*.25),pn=[Math.sin(nod),Math.cos(nod),0];
+    const plane=[[-1.5,0,-1.05],[1.5,0,-1.05],[1.5,0,1.05],[-1.5,0,1.05]].map(([x,y,z])=>proj(x*Math.cos(nod)-y*Math.sin(nod),x*Math.sin(nod)+y*Math.cos(nod)+.08,z));
+    ctx.beginPath();plane.forEach(([sx,sy],i)=>i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy));ctx.closePath();
+    ctx.fillStyle=`rgba(${SKY},${.05*dim})`;ctx.fill();ctx.strokeStyle=`rgba(${SKY},${.28*dim})`;ctx.stroke();
+    // brain points: tint by which side of the plane they fall on
+    const sweep=(t*.35)%6-3;
+    for(const p of brain){const[sx,sy,k,Z]=proj(p.x,p.y,p.z);
+      const side=p.x*pn[0]+(p.y-.08)*pn[1];
+      const depth=Math.max(.2,Math.min(1,(7.0-Z)/1.8));
+      const near=Math.exp(-Math.pow((p.x*cosy-p.z*siny)-sweep,2)*6);
+      const a=(.42+.5*near)*depth*dim;
+      ctx.fillStyle=side<0?`rgba(${PINK},${a})`:near>.3?`rgba(${ORANGE},${a})`:`rgba(${SKY},${a})`;
+      const r=depth>.7?2:1.4;ctx.fillRect(sx-r/2,sy-r/2,r,r)}
+    // orbit ring, thin
+    ctx.beginPath();for(let i=0;i<=120;i++){const u=i/120*2*Math.PI;const[sx,sy]=proj(1.7*Math.cos(u),-.1,1.7*Math.sin(u));i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy)}
+    ctx.strokeStyle=`rgba(${LINE},${.12*dim})`;ctx.stroke();
+  }
+  document.addEventListener('visibilitychange',()=>{running=!document.hidden;if(running){last=0;requestAnimationFrame(frame)}});
+  requestAnimationFrame(frame);
+})();
 
 /* ---------- boot ---------- */
 buildCorpus();
