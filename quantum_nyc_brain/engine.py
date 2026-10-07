@@ -16,7 +16,7 @@ import numpy as np
 import requests
 from elasticsearch import Elasticsearch, helpers
 from mistralai.client import Mistral
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from qlogic import SCRIPT, compile_query, script_params
 
@@ -31,9 +31,11 @@ mistral = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
 
 
 class Parsed(BaseModel):
-    positive: str | None
-    not_: list[str]
-    any_of: list[str]
+    # JSON key is "not" (schema + wire); attribute is not_ because "not" is a Python keyword
+    model_config = ConfigDict(populate_by_name=True)
+    positive: str | None = None
+    not_: list[str] = Field(default_factory=list, alias="not")
+    any_of: list[str] = Field(default_factory=list)
 
 
 def embed(texts, batch=32):
@@ -82,7 +84,7 @@ def parse(text):
             {"role": "system", "content": (
                 "Convert the search request into a flat logic expression over short noun-phrase concepts. "
                 "positive: the main thing sought (null if the request is only a set of alternatives). "
-                "not_: concepts to exclude. any_of: alternatives joined by OR. Concepts are 1-4 words, no logic words.")},
+                "not: concepts to exclude. any_of: alternatives joined by OR. Concepts are 1-4 words, no logic words.")},
             {"role": "user", "content": text},
         ],
         response_format=Parsed,
@@ -109,35 +111,51 @@ def quantum_query(params, n):
         "script": {"source": SCRIPT, "params": params}}}}
 
 
-def table(title, hits, offset):
-    print(f"\n{title}")
-    for rank, h in enumerate(hits, 1):
-        s = h["_source"]
-        note = " ".join(s["note"].split())
-        print(f"{rank:2d}  {h['_score'] - offset:7.3f}  {s.get('hectare', ''):4s} {s.get('date', ''):9s} {note[:110]}")
-    if not hits:
-        print("  (no results)")
+def hit(h, offset):
+    s = h["_source"]
+    # _source keeps null fields as null, so .get(k, '') still returns None for them
+    return {"id": h["_id"], "score": h["_score"] - offset, "note": " ".join(s["note"].split()),
+            "hectare": s.get("hectare") or "", "date": s.get("date") or ""}
 
 
-def query(text, size):
+def search(p, size):
+    """Embed the parsed concepts, compile (MATH.md §7), run one _msearch. Returns a JSON-able dict."""
     mu = np.array(es.get(index=INDEX, id=META_ID)["_source"]["mu"])
-    p = parse(text)
-    print(f"parsed: positive={p.positive!r} not={p.not_} any_of={p.any_of}")
     names = ([p.positive] if p.positive else []) + p.not_ + p.any_of
     V = center(embed(names), mu)
     it = iter(V)
     pos = next(it) if p.positive else None
     nots = [next(it) for _ in p.not_]
     ors = [next(it) for _ in p.any_of]
-    if pos is not None:
-        for name, r in zip(p.not_, nots):
-            print(f"  q·r({p.positive!r}, {name!r}) = {pos @ r:.3f}")
+    overlap = {name: float(pos @ r) for name, r in zip(p.not_, nots)} if pos is not None else {}
     params = script_params(*compile_query(pos, nots, ors))
     r = es.msearch(searches=[{"index": INDEX}, keyword_query(p, size), {"index": INDEX}, quantum_query(params, size)])
     kw, qn = r["responses"]
-    print(f"_msearch took {r['took']} ms")
-    table(f"keyword (bool + must_not)  [BM25]  total {kw['hits']['total']['value']}", kw["hits"]["hits"], 0.0)
-    table("quantum logic (script_score, exact)  [s = _score - 1]", qn["hits"]["hits"], 1.0)
+    return {"parsed": {"positive": p.positive, "not": p.not_, "any_of": p.any_of}, "overlap": overlap, "took": r["took"],
+            "keyword_total": kw["hits"]["total"]["value"],
+            "keyword": [hit(h, 0.0) for h in kw["hits"]["hits"]], "quantum": [hit(h, 1.0) for h in qn["hits"]["hits"]]}
+
+
+def table(title, hits):
+    print(f"\n{title}")
+    for rank, h in enumerate(hits, 1):
+        print(f"{rank:2d}  {h['score']:7.3f}  {h['hectare']:4s} {h['date']:9s} {h['note'][:110]}")
+    if not hits:
+        print("  (no results)")
+
+
+def query(text, size):
+    p = parse(text)
+    print(f"parsed: positive={p.positive!r} not={p.not_} any_of={p.any_of}")
+    try:
+        out = search(p, size)
+    except ValueError as e:  # nothing to score (no positive and no usable any_of)
+        sys.exit(f"cannot run this query: {e}")
+    for name, v in out["overlap"].items():
+        print(f"  q·r({p.positive!r}, {name!r}) = {v:.3f}")
+    print(f"_msearch took {out['took']} ms")
+    table(f"keyword (bool + must_not)  [BM25]  total {out['keyword_total']}", out["keyword"])
+    table("quantum logic (script_score, exact)  [s = _score - 1]", out["quantum"])
 
 
 if __name__ == "__main__":

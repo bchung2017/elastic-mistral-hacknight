@@ -32,7 +32,7 @@ Dropped: the autonomous ETL agent (mapping generation, self-repair, catalog). Da
 - **Grammar (flat, no nesting):** `{positive, not: [...], any_of: [...]}`, filled by Mistral structured output.
 - **Concepts:** one embedding per concept; Mistral paraphrase → SVD subspace only if time allows.
 - **Filters:** none.
-- **Interface:** one script/notebook printing side-by-side tables (keyword baseline vs. quantum, from one `_msearch`).
+- **Interface:** `engine.py query` prints side-by-side tables (keyword baseline vs. quantum, from one `_msearch`). `server.py` serves `graph_ui.html` and runs its grammar live via `POST /query`; until "Run on backend" is clicked the UI shows synthetic vectors and says so.
 
 ## First steps on the laptop (in order)
 
