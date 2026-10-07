@@ -1,6 +1,8 @@
 """Numerical checks for every claim in MATH.md. Run: python verify_math.py"""
 import numpy as np
 
+from qlogic import orth, score
+
 rng = np.random.default_rng(0)
 D = 1024
 
@@ -104,34 +106,7 @@ qq = unit(rng.normal(size=D) + paras.sum(0))
 res_sub = np.abs(paras @ ((I - Pk) @ qq)).mean()
 res_mean = np.abs(paras @ ((I - np.outer(m, m)) @ qq)).mean()
 assert res_sub < res_mean
-# ---- Query semantics (MATH.md §7) ----
-
-
-def orth(vecs, eps=0.1):
-    """Orthonormal basis of span(vecs), dropping vectors with norm < eps."""
-    vecs = [v for v in vecs if np.linalg.norm(v) >= eps]
-    if not vecs:
-        return np.zeros((D, 0))
-    Q, _ = np.linalg.qr(np.stack(vecs, axis=1))
-    return Q
-
-
-def score(d, positive=None, not_=(), any_of=()):
-    N = orth(not_)
-    QN = I - N @ N.T
-    s_pos = s_or = None
-    if positive is not None:
-        qp = QN @ positive
-        s_pos = d @ (qp / np.linalg.norm(qp))
-    if any_of:
-        ct = [QN @ c for c in any_of]
-        U = orth(ct)
-        s_or = float(np.sum((U.T @ d) ** 2)) if sum(c @ d for c in ct) > 0 else 0.0
-    if s_pos is not None and s_or is not None:
-        return max(0.0, s_pos) * s_or
-    return s_pos if s_pos is not None else s_or
-
-
+# ---- Query semantics (MATH.md §7), reference implementation in qlogic.py ----
 n1 = unit(rng.normal(size=D))
 c1 = unit(unit(rng.normal(size=D)) + 1.5 * n1)  # OR concept entangled with the negated concept
 c2 = unit(rng.normal(size=D))
@@ -152,6 +127,19 @@ d_al = unit(c1 + c2)
 U2 = orth([c1, c2])
 assert np.isclose(np.sum((U2.T @ d_al) ** 2), np.sum((U2.T @ -d_al) ** 2))
 assert score(d_al, any_of=[c1, c2]) > 0.5 and score(-d_al, any_of=[c1, c2]) == 0.0
+# max-gate rejects a doc aligned with c1 but strongly anti-aligned with c2 only if no concept is positive;
+# a doc anti-aligned with every concept is rejected
+d_mixed = unit(1.0 * c1 - 1.5 * c2)
+assert (c1 @ d_mixed) > 0 and score(d_mixed, any_of=[c1, c2]) > 0  # max-gate passes: it IS aligned with c1
+assert score(unit(-c1 - c2), any_of=[c1, c2]) == 0.0
+
+# 15b. All any_of concepts swallowed by NOT: fall back to positive-only, or raise if no positive
+assert np.isclose(score(d, positive=q, not_=[n1], any_of=[n1]), score(d, positive=q, not_=[n1]))
+try:
+    score(d, not_=[n1], any_of=[n1])
+    raise AssertionError("expected ValueError")
+except ValueError:
+    pass
 
 # 16. Combined score lies in [0, 1]; pure-positive score lies in [-1, 1]
 for _ in range(200):

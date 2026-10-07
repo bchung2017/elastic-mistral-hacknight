@@ -89,7 +89,7 @@ The two orders of negation differ by exactly this commutator [4]:
 
     (I−P_a)(I−P_b) − (I−P_b)(I−P_a) = [P_a, P_b]
 
-Demo: pick two related concepts (centered cosine ~0.4–0.7), run NOT a then NOT b vs. the reverse, and show the top-10 changing. **Expect the effect to be small** unless the pair is near 45°. Print θ and the commutator norm next to the results so the size is explained, not hidden. This is the formal reason the quantum-logic lattice is non-distributive. Classic example: three distinct lines a, b, c in a plane. a AND (b OR c) = a AND plane = a, but (a AND b) OR (a AND c) = 0 OR 0 = 0 [9]. Curiosity — don't demo distributivity.
+**This is why the engine negates jointly (§7 Step 1), and the engine is order-independent by construction.** Sequential negation is order-dependent *and* leaks (§4). The demo is the argument for the design: run NOT a then NOT b, the reverse, and the joint projection. Show the two sequential orders disagreeing and leaking, while the joint version is stable and leak-free. Pick two related concepts (centered cosine ~0.4–0.7). **Expect the order difference to be small** unless the pair is near 45°. Print θ and the commutator norm next to the results so the size is explained, not hidden. This is the formal reason the quantum-logic lattice is non-distributive. Classic example: three distinct lines a, b, c in a plane. a AND (b OR c) = a AND plane = a, but (a AND b) OR (a AND c) = 0 OR 0 = 0 [9]. Curiosity — don't demo distributivity.
 
 
 ## 6. Born rule — and where it breaks
@@ -118,9 +118,11 @@ N = orth(not concepts) via QR, Q_N = I − N Nᵀ. Both the positive query and e
 
     c̃ᵢ = Q_N cᵢ     (drop any with ‖c̃ᵢ‖ < 0.1: that concept was mostly the negated one)
     U = orth(c̃ᵢ)    (U ⊥ N automatically, so d's negated component is ignored)
-    s_or(d) = ‖Uᵀd‖²   if Σᵢ c̃ᵢ · d > 0,   else 0        ∈ [0, 1]
+    s_or(d) = ‖Uᵀd‖²   if maxᵢ c̃ᵢ · d > 0,   else 0        ∈ [0, 1]
 
-‖Uᵀd‖² is the Born probability that d lies in the OR-subspace. That's the right quantity for OR, but it's sign-blind [15], so the gate zeroes documents on the wrong side of the concepts. Known gap: a doc strongly aligned with c̃₁ and anti-aligned with c̃₂ can pass the gate if the sum is positive. Acceptable for MVP.
+‖Uᵀd‖² is the Born probability that d lies in the OR-subspace. That's the right quantity for OR, but it's sign-blind [15], so the gate zeroes documents that aren't on the positive side of *any* OR concept. The gate is a vote (max), not a sum. A sum would let a doc anti-aligned with one concept pass on the strength of another.
+
+If every c̃ᵢ is dropped: with a positive term, fall back to positive-only and print a warning; with no positive term, refuse the query (nothing left to score) [15b]. The client does the dropping, so the Painless receives only surviving c̃ᵢ and U, and empty lists mean "no OR term.
 
 Alternative if the subspace story isn't needed: signed soft-OR `max_i (c̃ᵢ · d)`. That's the fuzzy-logic (Gödel) OR, not quantum logic. Simpler, and correct on sign.
 
@@ -155,13 +157,15 @@ Client-side, in numpy: centering, Q_N, q′, c̃ᵢ, and U. Elasticsearch receiv
 float[] v = doc['vec'].vectorValue;
 double pos = 0;
 if (params.q != null) { for (int j = 0; j < v.length; j++) pos += v[j] * params.q[j]; }
-double orS = 0, gate = 0;
+double orS = 0;
 for (int i = 0; i < params.u.size(); i++) {
   double t = 0; for (int j = 0; j < v.length; j++) t += v[j] * params.u[i][j];
   orS += t * t;
 }
+double gate = -1e9;
 for (int i = 0; i < params.c.size(); i++) {
-  for (int j = 0; j < v.length; j++) gate += v[j] * params.c[i][j];
+  double t = 0; for (int j = 0; j < v.length; j++) t += v[j] * params.c[i][j];
+  gate = Math.max(gate, t);
 }
 if (params.c.size() > 0 && gate <= 0) orS = 0;
 double s;
@@ -171,7 +175,7 @@ else s = orS;
 return 1.0 + s;
 ```
 
-Params: `q` (q′, or null), `u` (basis U as a list of vectors), `c` (the c̃ᵢ, for the gate). Write the Painless to match `score()` and test it against `score()` on ~20 docs before trusting it.
+Params: `q` (q′, or null), `u` (basis U as a list of vectors), `c` (the c̃ᵢ, for the gate). **Canonical code lives in `qlogic.py`** (`compile_query`, `score`, `SCRIPT`); this listing is a copy. A scalar translation of the Painless matched `score()` on 100/100 docs across four query shapes. `es_checks.py` confirms it on the real cluster.
 
 **Show Elastic explicitly in the demo:** send the keyword baseline (`bool` + `must_not` on `note`) and the quantum `script_score` query in **one `_msearch`**, and display both result lists side by side.
 
@@ -196,5 +200,5 @@ Projection is worth claiming only if it lowers leak@10 versus `must_not` while h
 - A concept is a subspace. NOT is the orthogonal complement: q′ = q − N Nᵀ q (Birkhoff–von Neumann 1936). It applies to every other term.
 - OR is gated subspace membership: ‖Uᵀd‖², zeroed on the wrong side.
 - Elasticsearch scores every document exactly (`script_score`), side by side with a `must_not` baseline in one `_msearch`.
-- Negations don't commute: ‖[P_a, P_b]‖ = |cos θ| sin θ. Show both orders.
+- Negations don't commute (‖[P_a, P_b]‖ = |cos θ| sin θ), so sequential NOT is order-dependent and leaks. The engine negates jointly. Show sequential in both orders vs. joint.
 - Result: leak@10 and keep@10 vs. `must_not`.

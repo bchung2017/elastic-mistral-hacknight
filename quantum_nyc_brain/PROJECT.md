@@ -34,6 +34,11 @@ Dropped: the autonomous ETL agent (mapping generation, self-repair, catalog). Da
 - **Filters:** none.
 - **Interface:** one script/notebook printing side-by-side tables (keyword baseline vs. quantum, from one `_msearch`).
 
+## First steps on the laptop (in order)
+
+1. `python smoke_test.py`: Elasticsearch reachable, Mistral import path (`mistralai.client` vs `mistralai`), embed dims, squirrel row count.
+2. `python es_checks.py`: `vectorValue` on `index: false`, `null` param, Painless = numpy on the real cluster, latency at 5k docs. If any line fails, stop and fix before building.
+
 ## Open (to fill in while building, not before)
 
 - Squirrel stories row count and which text field gets embedded
