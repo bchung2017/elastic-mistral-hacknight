@@ -6,11 +6,12 @@
 <title>Quantum NYC Brain Graph</title>
 <style>
 :root{
-  --bg:#FFFAEB; --grid:#F3E8C8; --panel:#fff; --panel2:#FFF4D6; --line:#E8D9AE; --text:#2a2418; --mute:#7a6d4f;
-  --pos:#A0C443; --not:#E10500; --or:#40769E; --out:#FA500F; --warn:#FF8205; --edge:#C9B77F;
+  color-scheme:dark;
+  --bg:#14110d; --grid:#1f1a13; --panel:#1d1913; --panel2:#2a241a; --line:#3b3325; --text:#f4eedd; --mute:#a39a82;
+  --pos:#A0C443; --not:#E10500; --or:#5DA4DC; --out:#FA500F; --warn:#FFAF00; --edge:#6b5f45;
   --pos2:#66B5AE; --neg2:#D7689D; --sky:#5DA4DC; --sun:#FFD800;
-  --pos-ink:#5d7a14; --not-ink:#E10500; --or-ink:#40769E; --out-ink:#C2410A; --warn-ink:#B45F00;
-  --shadow:0 1px 2px rgba(80,60,0,.08),0 4px 14px rgba(80,60,0,.08);
+  --pos-ink:#A0C443; --not-ink:#FF5A4D; --or-ink:#5DA4DC; --out-ink:#FF8205; --warn-ink:#FFAF00;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.4);
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
@@ -61,7 +62,7 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
 .col h4 small{font-weight:400;color:var(--mute)}
 .row{display:grid;grid-template-columns:18px 1fr 44px;gap:6px;padding:4px 6px;border-radius:6px;font-size:12px;align-items:start}
 .row:nth-child(even){background:var(--panel2)}
-.row.leak{outline:1px solid var(--not);outline-offset:-1px;background:color-mix(in srgb,var(--not) 10%,transparent)}
+.row.leak{outline:1px solid var(--not);outline-offset:-1px;background:color-mix(in srgb,var(--not) 22%,transparent)}
 .row .n{color:var(--mute)}
 .row .sc{text-align:right;color:var(--mute)}
 .row .bar{height:3px;background:var(--out);border-radius:2px;margin-top:3px}
@@ -82,7 +83,7 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
 #cf input{flex:1;background:transparent;border:0;padding:8px 10px;font-size:15px;outline:none}
 #cf:focus-within{border-color:var(--out)}
 #go{background:var(--out);border-color:var(--out);color:#fff;border-radius:10px;padding:4px 14px}
-#steps{display:grid;gap:3px;margin-bottom:8px;font-size:11.5px;color:var(--mute);background:color-mix(in srgb,var(--panel) 92%,transparent);border-radius:8px}
+#steps{display:grid;gap:3px;margin-bottom:8px;font-size:11.5px;color:var(--mute);background:color-mix(in srgb,var(--panel) 94%,transparent);border-radius:8px}
 #steps:empty{display:none}
 #steps .st{display:grid;grid-template-columns:16px 78px 1fr;gap:6px;padding:3px 10px;align-items:baseline}
 #steps .st i{font-style:normal;color:var(--mute)}
