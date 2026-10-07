@@ -129,7 +129,7 @@ button.primary{background:var(--m-od);border-color:var(--m-od);color:#fff}
 <div id="settings" hidden>
   <label>Parse endpoint <input id="pep" class="mono" placeholder="POST {query} → {positive?, not[], any_of[]}"></label>
   <label>Search endpoint <input id="ep" class="mono" placeholder="POST grammar → engine.search()"></label>
-  <small>Served by server.py: /query is set automatically. Empty = local synthetic vectors / heuristic parser.</small>
+  <small>Served by server.py: /query and /parse are set automatically. Empty = local synthetic vectors / heuristic parser.</small>
 </div>
 
 <canvas id="bg" aria-hidden="true"></canvas>
@@ -606,7 +606,7 @@ buildCorpus();
 const Qn={id:nid++,kind:"query",x:380,y:30},Rn={id:nid++,kind:"results",x:780,y:30};
 nodes.push(Qn,Rn);mountQuery(Qn);mountResults(Rn);
 Qn.el.classList.add('hidden');Rn.el.classList.add('hidden');
-if(location.protocol.startsWith('http'))document.getElementById('ep').value='/query';
+if(location.protocol.startsWith('http')){document.getElementById('ep').value='/query';document.getElementById('pep').value='/parse';}
 applyView();qIn.focus();
 </script>
 </body>

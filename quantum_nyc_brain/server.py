@@ -4,6 +4,7 @@ pip install flask
 export ELASTIC_ENDPOINT=... ELASTIC_API_KEY=... MISTRAL_API_KEY=...
 python server.py            # http://127.0.0.1:5000  -> graph_ui.html, "Run on backend" posts to /query
 
+POST /parse  {"query": "rats but not restaurants"} -> {"positive": "rats", "not": ["restaurants"], "any_of": []}
 POST /query  {"positive": "rat", "not": ["restaurant"], "any_of": []}  -> engine.search() output
 """
 from pathlib import Path
@@ -18,6 +19,13 @@ app = Flask(__name__)
 @app.get("/")
 def ui():
     return send_file(Path(__file__).with_name("graph_ui.html"))
+
+
+@app.post("/parse")
+def parse():
+    """{"query": text} -> {"positive", "not", "any_of"} via Mistral structured output (engine.parse)."""
+    p = engine.parse(request.get_json(force=True)["query"])
+    return jsonify({"positive": p.positive, "not": p.not_, "any_of": p.any_of})
 
 
 @app.post("/query")
