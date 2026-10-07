@@ -122,7 +122,7 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
 <div id="view"><div id="world"><svg id="edges"></svg></div></div>
 <div id="chat" class="empty">
   <div id="steps" class="mono"></div>
-  <form id="cf" autocomplete="off"><input id="q" placeholder="Ask the city…  e.g. rats but not restaurants" aria-label="query"><button id="go" aria-label="send">↵</button></form>
+  <form id="cf" autocomplete="off"><input id="q" placeholder="Ask the city…  e.g. rats but not restaurants" aria-label="query"><button id="go" type="button" aria-label="send">↵</button></form>
 </div>
 <div id="toast"></div>
 
@@ -505,7 +505,10 @@ async function backendSearch(ep,g){
   const j=await r.json();const hits=j.hits||j.records||j;
   nodes.find(n=>n.kind==="results").el.querySelector('.col.q .rows').innerHTML=(Array.isArray(hits)?hits:[]).slice(0,8).map((h,i)=>`<div class="row"><span class="n mono">${i+1}</span><span>${h.text||h.note||h._source?.note||JSON.stringify(h)}</span><span class="sc mono">${(h.score??h._score??0).toFixed(2)}</span></div>`).join('')||'<div style="padding:6px;color:var(--mute)">empty</div>';
 }
-document.getElementById('cf').onsubmit=e=>{e.preventDefault();const t=qIn.value.trim();if(t){runQuery(t);qIn.value=''}};
+const submitQ=()=>{const t=qIn.value.trim();if(t){runQuery(t);qIn.value=''}};
+document.getElementById('cf').addEventListener('submit',e=>e.preventDefault());
+qIn.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing){e.preventDefault();submitQ()}});
+document.getElementById('go').addEventListener('click',e=>{e.preventDefault();submitQ()});
 document.getElementById('gear').onclick=()=>{const p=document.getElementById('settings');p.hidden=!p.hidden};
 
 /* ---------- boot ---------- */
