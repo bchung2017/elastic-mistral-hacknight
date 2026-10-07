@@ -136,7 +136,7 @@ Handy documentation and references for tonight.
 
 ### Getting started
 - [Elasticsearch quickstart](https://www.elastic.co/docs/solutions/search/get-started) — your first index and query
-- [Connecting to Elasticsearch](https://www.elastic.co/docs/reference/elasticsearch/clients) — endpoints, API keys, and client setup
+- [Connecting to Elasticsearch](https://www.elastic.co/docs/reference/elasticsearch-clients) — endpoints, API keys, and client setup
 
 ### Mistral
 - [Mistral guide (this repo)](mistral_guide.md) — getting started with Mistral in a hack setting
