@@ -93,7 +93,7 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
   <button id="fit">Fit</button>
   <span class="sep"></span>
   <button id="copy">Copy grammar JSON</button>
-  <input id="ep" class="mono" placeholder="POST endpoint (optional)" aria-label="backend endpoint">
+  <input id="ep" class="mono" value="/query" placeholder="POST endpoint (server.py)" aria-label="backend endpoint">
   <button id="send" class="primary">Run on backend</button>
   <button id="theme" aria-label="toggle theme">Theme</button>
 </div>
@@ -242,7 +242,7 @@ function mountQuery(n){
 }
 function mountResults(n){
   const el=document.createElement('div');el.className='node results';n.el=el;
-  el.innerHTML=`<div class="hd" style="color:var(--out)"><span>Ranked records</span><span class="tag">one _msearch</span></div>
+  el.innerHTML=`<div class="hd" style="color:var(--out)"><span>Ranked records</span><span class="tag mode" style="color:var(--warn)">SYNTHETIC VECTORS · local demo</span></div>
   <div class="cols"><div class="col b"><h4>Keyword baseline <small>match + must_not</small></h4><div class="rows"></div></div>
   <div class="col q"><h4>Quantum logic <small>script_score, 1 + s</small></h4><div class="rows"></div></div></div><div class="foot mono"></div>`;
   placeNode(n);world.appendChild(el);header(el,n);
@@ -395,10 +395,15 @@ document.getElementById('copy').onclick=async()=>{const s=JSON.stringify(grammar
 document.getElementById('send').onclick=async()=>{
   const ep=document.getElementById('ep').value.trim();if(!ep)return toast('Set a POST endpoint first. Body: {positive?, not[], any_of[]}');
   try{const r=await fetch(ep,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(grammar())});
-    const j=await r.json();const hits=j.hits||j.records||j;
-    const el=nodes.find(n=>n.kind==="results").el.querySelector('.col.q .rows');
-    el.innerHTML=(Array.isArray(hits)?hits:[]).slice(0,8).map((h,i)=>`<div class="row"><span class="n mono">${i+1}</span><span>${h.text||h.note||h._source?.note||JSON.stringify(h)}</span><span class="sc mono">${(h.score??h._score??0).toFixed?.(2)||''}</span></div>`).join('')||'<div style="padding:6px;color:var(--mute)">empty</div>';
-    toast('Backend response rendered in the Quantum column')}catch(e){toast('Backend call failed: '+e.message)}
+    const j=await r.json();if(j.error)return toast('Backend: '+j.error);
+    // server.py returns {keyword:[{note,score}], quantum:[...], overlap, took}; a bare list still fills the quantum column
+    const R=nodes.find(n=>n.kind==="results").el,esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+    const render=(sel,hits)=>{R.querySelector(sel+' .rows').innerHTML=(Array.isArray(hits)?hits:[]).slice(0,8).map((h,i)=>`<div class="row"><span class="n mono">${i+1}</span><span>${esc(h.note??h.text??JSON.stringify(h))}</span><span class="sc mono">${(+(h.score??h._score??0)).toFixed(2)}</span></div>`).join('')||'<div style="padding:6px;color:var(--mute)">empty</div>'};
+    if(j.quantum){render('.col.b',j.keyword);render('.col.q',j.quantum)}else render('.col.q',j.hits||j.records||j);
+    const ov=Object.entries(j.overlap||{}).map(([k,v])=>`q·r[${esc(k)}] = <em>${(+v).toFixed(2)}</em>`).join(' · ');
+    R.querySelector('.foot').innerHTML=`<span><em>LIVE</em>: mistral-embed + Elasticsearch _msearch${j.took!=null?` · ${j.took} ms`:''}</span>${ov?`<span>${ov}</span>`:''}`;
+    const tag=R.querySelector('.tag.mode');tag.textContent='LIVE · mistral-embed · one _msearch';tag.style.color='var(--pos)';
+    toast('Live results rendered in both columns')}catch(e){toast('Backend call failed: '+e.message)}
 };
 document.getElementById('theme').onclick=()=>{const d=document.documentElement;const dark=getComputedStyle(d).getPropertyValue('--bg').trim()==='#0f1218';d.dataset.theme=dark?'light':'dark';drawEdges()};
 function layout(){
