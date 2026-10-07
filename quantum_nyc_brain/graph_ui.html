@@ -6,18 +6,12 @@
 <title>Quantum NYC Brain Graph</title>
 <style>
 :root{
-  --bg:#f4f5f7; --grid:#dfe2e8; --panel:#fff; --panel2:#f0f2f5; --line:#c9ced8; --text:#1b1f27; --mute:#667085;
-  --pos:#1d7a4b; --not:#c0392b; --or:#2b63c7; --out:#6b4fbb; --warn:#b26a00; --edge:#8892a6;
-  --shadow:0 1px 2px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.06);
+  --bg:#FFFAEB; --grid:#F3E8C8; --panel:#fff; --panel2:#FFF4D6; --line:#E8D9AE; --text:#2a2418; --mute:#7a6d4f;
+  --pos:#A0C443; --not:#E10500; --or:#40769E; --out:#FA500F; --warn:#FF8205; --edge:#C9B77F;
+  --pos2:#66B5AE; --neg2:#D7689D; --sky:#5DA4DC; --sun:#FFD800;
+  --pos-ink:#5d7a14; --not-ink:#E10500; --or-ink:#40769E; --out-ink:#C2410A; --warn-ink:#B45F00;
+  --shadow:0 1px 2px rgba(80,60,0,.08),0 4px 14px rgba(80,60,0,.08);
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0f1218; --grid:#1b202a; --panel:#181d27; --panel2:#202636; --line:#2f3748; --text:#e6e9ef; --mute:#8b94a7;
-  --pos:#4cc38a; --not:#ff7a68; --or:#6c9bff; --out:#a58cff; --warn:#e0a23c; --edge:#5b667d;
-  --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.35);}}
-:root[data-theme="dark"]{
-  --bg:#0f1218; --grid:#1b202a; --panel:#181d27; --panel2:#202636; --line:#2f3748; --text:#e6e9ef; --mute:#8b94a7;
-  --pos:#4cc38a; --not:#ff7a68; --or:#6c9bff; --out:#a58cff; --warn:#e0a23c; --edge:#5b667d;
-  --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.35);}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -57,7 +51,7 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
 .slot span{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stats{padding:8px 10px;font-size:11.5px;color:var(--mute);display:grid;gap:3px}
 .stats em{font-style:normal;color:var(--text)}
-.stats .warn{color:var(--warn)}
+.stats .warn{color:var(--warn-ink)}
 .formula{margin:0 10px 10px;padding:6px 8px;background:var(--panel2);border-radius:6px;font-size:11.5px}
 .results{width:600px}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:0}
@@ -67,13 +61,13 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
 .col h4 small{font-weight:400;color:var(--mute)}
 .row{display:grid;grid-template-columns:18px 1fr 44px;gap:6px;padding:4px 6px;border-radius:6px;font-size:12px;align-items:start}
 .row:nth-child(even){background:var(--panel2)}
-.row.leak{outline:1px solid var(--not);outline-offset:-1px;background:color-mix(in srgb,var(--not) 12%,transparent)}
+.row.leak{outline:1px solid var(--not);outline-offset:-1px;background:color-mix(in srgb,var(--not) 10%,transparent)}
 .row .n{color:var(--mute)}
 .row .sc{text-align:right;color:var(--mute)}
 .row .bar{height:3px;background:var(--out);border-radius:2px;margin-top:3px}
 .foot{padding:7px 10px;border-top:1px solid var(--line);font-size:11.5px;color:var(--mute);display:flex;gap:14px;flex-wrap:wrap}
 .foot em{font-style:normal;color:var(--text)}
-.role-pos{color:var(--pos)}.role-not{color:var(--not)}.role-or{color:var(--or)}.role-none{color:var(--mute)}
+.role-pos{color:var(--pos-ink)}.role-not{color:var(--not-ink)}.role-or{color:var(--or-ink)}.role-none{color:var(--mute)}
 #hint-unused{position:fixed;left:16px;bottom:12px;color:var(--mute);font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px;z-index:10}
 #toast{position:fixed;right:16px;bottom:12px;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;box-shadow:var(--shadow);display:none;z-index:30;font-size:12px}
 #settings{position:fixed;top:46px;right:16px;z-index:25;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:10px 12px;display:grid;gap:8px;width:min(420px,calc(100vw - 32px))}
@@ -84,7 +78,7 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
 #chat{position:fixed;left:50%;transform:translateX(-50%);width:min(680px,calc(100vw - 32px));z-index:15;transition:top .5s,bottom .5s}
 #chat.empty{top:calc(50% - 30px)}
 #chat:not(.empty){bottom:14px}
-#cf{display:flex;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px}
+#cf{display:flex;gap:8px;background:var(--panel);border:2px solid var(--sun);border-radius:14px;box-shadow:var(--shadow);padding:8px}
 #cf input{flex:1;background:transparent;border:0;padding:8px 10px;font-size:15px;outline:none}
 #cf:focus-within{border-color:var(--out)}
 #go{background:var(--out);border-color:var(--out);color:#fff;border-radius:10px;padding:4px 14px}
@@ -111,7 +105,6 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
   <span style="flex:1"></span>
   <button id="copy">Copy grammar JSON</button>
   <button id="gear" aria-label="backend settings">Backends</button>
-  <button id="theme" aria-label="toggle theme">Theme</button>
 </div>
 <div id="settings" hidden>
   <label>Parse endpoint <input id="pep" class="mono" placeholder="POST {query} → {positive?, not[], any_of[]}"></label>
@@ -259,14 +252,14 @@ function mountConcept(n){
 }
 function mountQuery(n){
   const el=document.createElement('div');el.className='node query';n.el=el;
-  el.innerHTML=`<div class="hd" style="color:var(--out)"><span>Query</span><span class="tag">compile</span></div>
+  el.innerHTML=`<div class="hd" style="color:var(--out-ink)"><span>Query</span><span class="tag">compile</span></div>
   ${SLOTS.map(([k,l,c])=>`<div class="slot" data-slot="${k}"><div class="port" data-slot="${k}"></div><b class="${c}">${l}</b><span class="lst">—</span></div>`).join('')}
   <div class="stats mono"></div><div class="formula mono"></div>`;
   placeNode(n);world.appendChild(el);header(el,n);
 }
 function mountResults(n){
   const el=document.createElement('div');el.className='node results';n.el=el;
-  el.innerHTML=`<div class="hd" style="color:var(--out)"><span>Ranked records</span><span class="tag">one _msearch</span></div>
+  el.innerHTML=`<div class="hd" style="color:var(--out-ink)"><span>Ranked records</span><span class="tag">one _msearch</span></div>
   <div class="cols"><div class="col b"><h4>Keyword baseline <small>match + must_not</small></h4><div class="rows"></div></div>
   <div class="col q"><h4>Quantum logic <small>script_score, 1 + s</small></h4><div class="rows"></div></div></div><div class="foot mono"></div>`;
   placeNode(n);world.appendChild(el);header(el,n);
@@ -333,7 +326,7 @@ function drawEdges(){
 const f2=x=>(x>=0?" ":"")+x.toFixed(2);
 function vecBars(el,v){
   const box=el.querySelector('.vec');const m=Math.max(...v.map(Math.abs),1e-9);
-  box.innerHTML=Array.from(v,x=>`<i style="height:${Math.max(1,Math.abs(x)/m*100)}%;background:${x>=0?'var(--pos)':'var(--not)'};align-self:${x>=0?'flex-end':'flex-start'}"></i>`).join('');
+  box.innerHTML=Array.from(v,x=>`<i style="height:${Math.max(1,Math.abs(x)/m*100)}%;background:${x>=0?'var(--pos)':'var(--neg2)'};align-self:${x>=0?'flex-end':'flex-start'}"></i>`).join('');
 }
 function lit(text,words){const s=new Set(tok(text));return words.some(w=>s.has(w))}
 let last=null;
@@ -416,7 +409,6 @@ function grammar(){
 /* ---------- toolbar ---------- */
 const toast=(m)=>{const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',3500)};
 document.getElementById('copy').onclick=async()=>{const s=JSON.stringify(grammar(),null,2);try{await navigator.clipboard.writeText(s);toast('Grammar JSON copied')}catch{toast(s)}};
-document.getElementById('theme').onclick=()=>{const d=document.documentElement;const dark=getComputedStyle(d).getPropertyValue('--bg').trim()==='#0f1218';d.dataset.theme=dark?'light':'dark';drawEdges()};
 function layout(){
   const cs=nodes.filter(n=>n.kind==="concept"),order={positive:0,not:1,any_of:2,null:3};
   cs.sort((a,b)=>order[roleOf(a)]-order[roleOf(b)]);cs.forEach((n,i)=>{n.x=40;n.y=30+i*150;placeNode(n)});
