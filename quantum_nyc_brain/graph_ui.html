@@ -545,12 +545,11 @@ document.getElementById('gear').onclick=()=>{const p=document.getElementById('se
   const city=[];
   for(let a=-1.2;a<=1.2;a+=.028)for(let b=-1.2;b<=1.2;b+=.012){
     const x=.5+a*ct-b*st,y=.5+a*st+b*ct;if(x<0||x>1||y<0||y>1||!inPoly(x,y))continue;
-    city.push({x:(x-.5)*2.2,z:(y-.5)*5.2,lit:R()<.035});
+    city.push({u:x,v:y,lit:R()<.035,phase:R()*6.28,rate:.6+R()*.8});
   }
-  const outline=ISLAND.map(([x,y])=>({x:(x-.5)*2.2,z:(y-.5)*5.2}));
   // brain: two hemispheres, radial ripple for gyri
   const brain=[];
-  for(let i=0;i<4200;i++){
+  for(let i=0;i<9000;i++){
     const u=R()*2*Math.PI,v=Math.acos(2*R()-1),s=Math.sin(v);
     let x=s*Math.cos(u),y=Math.cos(v),z=s*Math.sin(u);
     const rr=1+.05*Math.sin(7*u+3*v)+.04*Math.sin(5*v-4*u)+.03*Math.cos(11*x+9*z);
@@ -569,30 +568,33 @@ document.getElementById('gear').onclick=()=>{const p=document.getElementById('se
     const t=reduce?0:(now-t0)/1000;
     const dim=document.getElementById('chat').classList.contains('empty')?1:.55;
     ctx.clearRect(0,0,W,H);
-    const cx=W*.5,cy=H*.40,F=Math.min(W,H)*1.35;
+    const cx=W*.5,cy=H*.46,F=Math.min(W,H)*1.35;
     const ry=t*.045,cosy=Math.cos(ry),siny=Math.sin(ry),tilt=.62,cosx=Math.cos(tilt),sinx=Math.sin(tilt);
     const proj=(x,y,z)=>{const X=x*cosy-z*siny,Z=x*siny+z*cosy;const Y=y*cosx-Z*sinx,Z2=y*sinx+Z*cosx+6.2;const k=F/Z2;return[cx+X*k,cy+Y*k,k,Z2]};
-    // island, sitting on y=+1.15 (below the brain)
-    const gy=1.25,sc=.62;
-    ctx.beginPath();outline.forEach((p,i)=>{const[sx,sy]=proj(p.x*sc,gy,p.z*sc);i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy)});ctx.closePath();
-    ctx.strokeStyle=`rgba(${LINE},${.35*dim})`;ctx.lineWidth=1;ctx.stroke();
-    for(const p of city){const[sx,sy,k]=proj(p.x*sc,gy,p.z*sc);
-      if(p.lit){const f=.6+.4*Math.sin(t*.8+p.x*7+p.z*3);ctx.fillStyle=`rgba(${ORANGE},${.7*f*dim})`;ctx.fillRect(sx-1,sy-1,2.4,2.4)}
-      else{ctx.fillStyle=`rgba(${LINE},${.26*dim})`;ctx.fillRect(sx,sy,1.2,1.2)}}
+    // city: static 2D map, fixed in screen space, lights glimmer only
+    const mh=H*1.08,mw=mh*.5,rot=-29*Math.PI/180,cr=Math.cos(rot),sr=Math.sin(rot),m2=(x,y)=>{const X=(x-.5)*mw,Y=(.5-y)*mh;return[cx+X*cr-Y*sr,cy+.02*H+X*sr+Y*cr]};
+    ctx.beginPath();ISLAND.forEach(([x,y],i)=>{const[sx,sy]=m2(x,y);i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy)});ctx.closePath();
+    ctx.fillStyle=`rgba(${SKY},${.035*dim})`;ctx.fill();ctx.strokeStyle=`rgba(${LINE},${.34*dim})`;ctx.lineWidth=1;ctx.stroke();
+    for(const p of city){const[sx,sy]=m2(p.u,p.v);
+      if(p.lit){const f=.45+.55*(.5+.5*Math.sin(t*.9*p.rate+p.phase));ctx.fillStyle=`rgba(${ORANGE},${.65*f*dim})`;ctx.fillRect(sx-1,sy-1,2.2,2.2)}
+      else{const g=.22+.10*Math.sin(t*.4+p.u*9+p.v*13);ctx.fillStyle=`rgba(${LINE},${g*dim})`;ctx.fillRect(sx,sy,1.4,1.4)}}
     // cutting plane through the brain: the "NOT" hyperplane, slowly nodding
     const nod=.18*Math.sin(t*.25),pn=[Math.sin(nod),Math.cos(nod),0];
     const plane=[[-1.5,0,-1.05],[1.5,0,-1.05],[1.5,0,1.05],[-1.5,0,1.05]].map(([x,y,z])=>proj(x*Math.cos(nod)-y*Math.sin(nod),x*Math.sin(nod)+y*Math.cos(nod)+.08,z));
     ctx.beginPath();plane.forEach(([sx,sy],i)=>i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy));ctx.closePath();
     ctx.fillStyle=`rgba(${SKY},${.05*dim})`;ctx.fill();ctx.strokeStyle=`rgba(${SKY},${.28*dim})`;ctx.stroke();
-    // brain points: tint by which side of the plane they fall on
-    const sweep=(t*.35)%6-3;
+    // brain points: tint by which side of the plane they fall on; whole cloud breathes, drawn additively for glow
+    const sweep=(t*.35)%6-3,breath=.75+.25*Math.sin(t*.9);
+    {const[hx,hy]=proj(0,0,0);const hr=F*.42*(1+.04*Math.sin(t*.9));const g=ctx.createRadialGradient(hx,hy,0,hx,hy,hr);g.addColorStop(0,`rgba(${SKY},${.16*breath*dim})`);g.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=g;ctx.fillRect(hx-hr,hy-hr,hr*2,hr*2)}
+    ctx.globalCompositeOperation='lighter';
     for(const p of brain){const[sx,sy,k,Z]=proj(p.x,p.y,p.z);
       const side=p.x*pn[0]+(p.y-.08)*pn[1];
       const depth=Math.max(.2,Math.min(1,(7.0-Z)/1.8));
       const near=Math.exp(-Math.pow((p.x*cosy-p.z*siny)-sweep,2)*6);
-      const a=(.42+.5*near)*depth*dim;
+      const tw=.8+.2*Math.sin(t*1.7+p.x*5+p.y*7+p.z*3);const a=(.55+.5*near)*depth*dim*breath*tw;
       ctx.fillStyle=side<0?`rgba(${PINK},${a})`:near>.3?`rgba(${ORANGE},${a})`:`rgba(${SKY},${a})`;
-      const r=depth>.7?2:1.4;ctx.fillRect(sx-r/2,sy-r/2,r,r)}
+      const r=depth>.7?2.2:1.6;ctx.fillRect(sx-r/2,sy-r/2,r,r)}
+    ctx.globalCompositeOperation='source-over';
     // orbit ring, thin
     ctx.beginPath();for(let i=0;i<=120;i++){const u=i/120*2*Math.PI;const[sx,sy]=proj(1.7*Math.cos(u),-.1,1.7*Math.sin(u));i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy)}
     ctx.strokeStyle=`rgba(${LINE},${.12*dim})`;ctx.stroke();
