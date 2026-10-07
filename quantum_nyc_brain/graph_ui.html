@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quantum NYC Brain Graph</title>
+<style>
+:root{
+  --bg:#f4f5f7; --grid:#dfe2e8; --panel:#fff; --panel2:#f0f2f5; --line:#c9ced8; --text:#1b1f27; --mute:#667085;
+  --pos:#1d7a4b; --not:#c0392b; --or:#2b63c7; --out:#6b4fbb; --warn:#b26a00; --edge:#8892a6;
+  --shadow:0 1px 2px rgba(0,0,0,.08),0 4px 14px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1218; --grid:#1b202a; --panel:#181d27; --panel2:#202636; --line:#2f3748; --text:#e6e9ef; --mute:#8b94a7;
+  --pos:#4cc38a; --not:#ff7a68; --or:#6c9bff; --out:#a58cff; --warn:#e0a23c; --edge:#5b667d;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.35);}}
+:root[data-theme="dark"]{
+  --bg:#0f1218; --grid:#1b202a; --panel:#181d27; --panel2:#202636; --line:#2f3748; --text:#e6e9ef; --mute:#8b94a7;
+  --pos:#4cc38a; --not:#ff7a68; --or:#6c9bff; --out:#a58cff; --warn:#e0a23c; --edge:#5b667d;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 6px 18px rgba(0,0,0,.35);}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#bar{position:fixed;top:0;left:0;right:0;height:46px;display:flex;gap:8px;align-items:center;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line);z-index:20;overflow-x:auto;white-space:nowrap}
+#bar h1{font-size:14px;margin:0 8px 0 0;font-weight:600;letter-spacing:.2px}
+button,select,input{font:inherit;color:var(--text)}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--edge)}
+button.primary{background:var(--out);border-color:var(--out);color:#fff}
+.sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+#ep{width:210px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+#view{position:fixed;inset:46px 0 0 0;cursor:grab;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:32px 32px}
+#view.pan{cursor:grabbing}
+#world{position:absolute;left:0;top:0;transform-origin:0 0}
+#edges{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+#edges path{fill:none;stroke-width:2.2;pointer-events:stroke;cursor:pointer}
+#edges path:hover{stroke-width:4}
+.node{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);user-select:none}
+.node .hd{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line);cursor:move;border-radius:10px 10px 0 0;font-weight:600}
+.node .hd .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:9px;border:1px solid currentColor}
+.node .hd .x{margin-left:auto;cursor:pointer;color:var(--mute);padding:0 4px}
+.node .bd{padding:9px 10px}
+.concept{width:230px}
+.concept input.txt{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.concept input.txt:focus{outline:2px solid var(--or);outline-offset:-1px}
+.vec{display:flex;align-items:center;height:30px;gap:1px;margin-top:8px}
+.vec i{display:block;flex:1;background:var(--edge);min-height:1px}
+.role{margin-top:6px;font-size:11px;color:var(--mute);display:flex;justify-content:space-between}
+.port{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--panel);border:2px solid var(--edge);cursor:crosshair;z-index:3}
+.port:hover,.port.hot{background:var(--text)}
+.port.out{right:-8px;top:50%;margin-top:-7px}
+.query{width:340px}
+.slot{position:relative;display:flex;align-items:center;gap:8px;padding:6px 10px 6px 14px;border-bottom:1px dashed var(--line)}
+.slot .port{left:-8px;top:50%;margin-top:-7px}
+.slot b{width:64px}
+.slot span{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stats{padding:8px 10px;font-size:11.5px;color:var(--mute);display:grid;gap:3px}
+.stats em{font-style:normal;color:var(--text)}
+.stats .warn{color:var(--warn)}
+.formula{margin:0 10px 10px;padding:6px 8px;background:var(--panel2);border-radius:6px;font-size:11.5px}
+.results{width:600px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.col{padding:8px 10px}
+.col+.col{border-left:1px solid var(--line)}
+.col h4{margin:0 0 6px;font-size:12px;display:flex;justify-content:space-between;align-items:baseline}
+.col h4 small{font-weight:400;color:var(--mute)}
+.row{display:grid;grid-template-columns:18px 1fr 44px;gap:6px;padding:4px 6px;border-radius:6px;font-size:12px;align-items:start}
+.row:nth-child(even){background:var(--panel2)}
+.row.leak{outline:1px solid var(--not);outline-offset:-1px;background:color-mix(in srgb,var(--not) 12%,transparent)}
+.row .n{color:var(--mute)}
+.row .sc{text-align:right;color:var(--mute)}
+.row .bar{height:3px;background:var(--out);border-radius:2px;margin-top:3px}
+.foot{padding:7px 10px;border-top:1px solid var(--line);font-size:11.5px;color:var(--mute);display:flex;gap:14px;flex-wrap:wrap}
+.foot em{font-style:normal;color:var(--text)}
+.role-pos{color:var(--pos)}.role-not{color:var(--not)}.role-or{color:var(--or)}.role-none{color:var(--mute)}
+#hint{position:fixed;left:16px;bottom:12px;color:var(--mute);font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px;z-index:10}
+#toast{position:fixed;right:16px;bottom:12px;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;box-shadow:var(--shadow);display:none;z-index:30;font-size:12px}
+@media (max-width:700px){#hint{display:none}}
+</style>
+</head>
+<body>
+<div id="bar">
+  <h1>Quantum NYC Brain</h1>
+  <button id="addC">+ Concept</button>
+  <select id="preset">
+    <option value="">Presets…</option>
+    <option value="rats">rats NOT restaurant (paraphrase leak)</option>
+    <option value="chase">chase AND (hawk OR dog)</option>
+    <option value="order">rat NOT food, restaurant (joint vs sequential)</option>
+  </select>
+  <button id="layout">Auto-layout</button>
+  <button id="fit">Fit</button>
+  <span class="sep"></span>
+  <button id="copy">Copy grammar JSON</button>
+  <input id="ep" class="mono" placeholder="POST endpoint (optional)" aria-label="backend endpoint">
+  <button id="send" class="primary">Run on backend</button>
+  <button id="theme" aria-label="toggle theme">Theme</button>
+</div>
+
+<div id="view"><div id="world"><svg id="edges"></svg></div></div>
+<div id="hint">drag header to move · drag a port dot onto a slot to wire · click a wire to cut · wheel zooms · drag background pans</div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ---------- demo embedding (stand-in for mistral-embed) ----------
+   Hand-authored topic axes + hashed per-token noise. Paraphrases ("deli", "pizza") share the food axis with
+   "restaurant" without sharing the string. NOT real embeddings; the compile/score math below mirrors qlogic.py. */
+const LEAK = 0.4, D = 28, AX = ["food","rodent","park","tree","chase","sleep","human","dog","hawk","nest","snow","cute"];
+const LEX = {
+  food:{0:1}, restaurant:{0:.9,6:.4}, deli:{0:.8,6:.3}, pizza:{0:.9}, pepperoni:{0:.8}, bagel:{0:.9}, slice:{0:.6},
+  nuts:{0:.6,3:.5}, acorn:{0:.5,3:.7}, trash:{0:.5,1:.6}, snack:{0:.8}, eating:{0:.8}, dumpster:{0:.4,1:.6},
+  rat:{1:1,0:.3}, rats:{1:1,0:.3}, mouse:{1:.9}, vermin:{1:1}, pest:{1:.9}, burrow:{1:.5,9:.3}, droppings:{1:.8},
+  park:{2:1}, central:{2:.6}, lawn:{2:.8}, tree:{3:1}, oak:{3:.9}, branch:{3:.8}, canopy:{3:.7},
+  chase:{4:1}, chasing:{4:1}, fight:{4:1}, ran:{4:.7}, sprint:{4:.8},
+  sleep:{5:1}, napping:{5:1}, nap:{5:1}, human:{6:1}, tourist:{6:.9}, person:{6:1}, kid:{6:.8}, photo:{6:.6},
+  dog:{7:1}, dogs:{7:1}, leash:{7:.6}, hawk:{8:1}, hawks:{8:1}, owl:{8:.8}, nest:{9:1}, drey:{9:1}, babies:{9:.6,11:.5},
+  snow:{10:1}, winter:{10:.9}, cold:{10:.7}, cute:{11:1}, fluffy:{11:.9}, tail:{11:.5}, adorable:{11:1}
+};
+const COMMON = 12;  // shared anisotropic direction, removed by centering
+function h32(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+function rng(seed){let a=seed;return()=>{a=(a+0x6D2B79F5)|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function topicVec(text){const v=new Float64Array(AX.length);for(const t of tok(text)){const w=LEX[t];if(w)for(const k in w)if(k<AX.length)v[k]+=w[k]}return unit(v)}
+const tok = s => s.toLowerCase().match(/[a-z]+/g) || [];
+function rawEmbed(text){
+  const v = new Float64Array(D); const ts = tok(text); if(!ts.length) return v;
+  for(const t of ts){
+    const w = LEX[t]; if(w) for(const k in w) v[k]+=w[k];
+    const r = rng(h32(t)); for(let j=AX.length+1;j<D;j++) v[j]+=(r()-.5)*.5;
+  }
+  for(let j=0;j<D;j++) v[j]/=ts.length;
+  v[COMMON]+=1.2;
+  return v;
+}
+/* ---------- linear algebra ---------- */
+const dot=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s};
+const norm=a=>Math.sqrt(dot(a,a));
+const sub=(a,b)=>a.map((x,i)=>x-b[i]);
+const scale=(a,k)=>a.map(x=>x*k);
+const unit=a=>{const n=norm(a);return n?scale(a,1/n):a};
+function orth(vs,eps=0.1){const out=[];for(let v of vs){if(norm(v)<eps)continue;let r=Float64Array.from(v);for(const b of out)r=sub(r,scale(b,dot(r,b)));const n=norm(r);if(n>1e-6)out.push(scale(r,1/n))}return out}
+function projOut(v,B){let r=Float64Array.from(v);for(const b of B)r=sub(r,scale(b,dot(r,b)));return r}
+
+/* ---------- corpus ---------- */
+const STORIES = [
+ "Squirrel snatched a pepperoni slice from a tourist on the lawn and ran up an oak",
+ "Rat the size of a cat dragging a bagel out of a dumpster behind the deli",
+ "Two squirrels chasing each other around a tree for ten minutes, then a hawk showed up",
+ "Fluffy squirrel napping on a branch in Central Park, tail over its face",
+ "Rats and squirrels fighting over a trash can outside the restaurant on 2nd",
+ "A squirrel burrowed under the pizza place patio and came out with a whole slice",
+ "Hawk dive-bombed a squirrel near the Great Lawn; squirrel escaped up the canopy",
+ "Dog off leash sprinting after a squirrel, kid screaming, squirrel won",
+ "Squirrel built a drey in the oak outside my window, babies visible in the spring",
+ "Mouse droppings and a rat in the kitchen of the corner deli, squirrel on the fire escape",
+ "Squirrel eating nuts from a person's hand, adorable, photo taken",
+ "Snow day: squirrel sprinting across the park with an acorn, cold paws",
+ "Rat burrow found under the park bench by the food cart; vermin everywhere",
+ "Squirrel sleeping inside the nest in the winter, snow on the oak",
+ "Tourist feeding a squirrel a bagel, squirrel then chased the tourist",
+ "Dog chasing a squirrel up a tree, owl watching from the branch",
+ "Squirrel stole a snack from a kid at the playground, ran off with it",
+ "Huge rat in the restaurant dumpster, squirrel nearby unbothered",
+ "Squirrel fight on the lawn, tails fluffed, one ran up the tree",
+ "A quiet squirrel napping on the park bench, very cute",
+ "Hawk carrying a rat over Central Park while a squirrel watched",
+ "Squirrel with a pizza crust hopping through the pizza line, nobody noticed",
+ "Pest control van outside; mouse and rat sightings by the trash, squirrel in the tree",
+ "Squirrel babies in the nest after the snow melted, mom gathering acorn",
+ "Two dogs chasing one squirrel around the oak, leash tangled",
+ "Squirrel eating a deli sandwich on the steps, fluffy tail, photo op",
+ "Rats everywhere by the park trash; a squirrel napping in the tree above",
+ "Owl in the tree, squirrel hiding in the drey all night",
+ "Squirrel sprinting across the street, chased by a person on a bike",
+ "A restaurant owner chasing a squirrel off the outdoor patio",
+ "Cold winter, squirrel sleeping, acorn stash found under the snow",
+ "Cute squirrel sitting on a person's shoulder, tourist photo",
+ "Squirrel versus rat standoff over a dropped slice behind the pizza shop",
+ "Hawk and squirrel in the canopy; squirrel chased it off the branch, impressive",
+ "Squirrel buried an acorn in the lawn, dog dug it up",
+ "Squirrel running along a power line carrying a bagel",
+ "Rat in the park, vermin droppings near the nest box, squirrel avoided it",
+ "Squirrel on the restaurant roof napping in the sun, cute",
+ "Dog barking at a squirrel; squirrel unbothered, eating a snack on the branch",
+ "Mouse in the deli, squirrel outside in the snow staring through the window"
+];
+let DOCS = null;
+function buildCorpus(){
+  const raw = STORIES.map(rawEmbed);
+  const mu = new Float64Array(D); raw.forEach(v=>v.forEach((x,i)=>mu[i]+=x/raw.length));
+  DOCS = STORIES.map((t,i)=>({id:i,text:t,topic:topicVec(t),vec:unit(sub(raw[i],mu)),toks:new Set(tok(t))}));
+  DOCS.mu = mu;
+}
+const embedC = text => unit(sub(rawEmbed(text), DOCS.mu));
+
+/* ---------- compile + score (mirrors qlogic.py) ---------- */
+function compile(pos, nots, ors){
+  const N = orth(nots);
+  const qn = v => projOut(v,N);
+  let q=null, qNorm=null;
+  if(pos){const qp=qn(pos);qNorm=norm(qp);q=qNorm>1e-9?scale(qp,1/qNorm):null}
+  const c = ors.map(qn).filter(x=>norm(x)>=0.1);
+  const dropped = ors.length - c.length;
+  const U = orth(c);
+  return {q,qNorm,c,U,dropped,N};
+}
+function scoreDoc(d, k){
+  const sPos = k.q ? dot(d,k.q) : null;
+  let sOr = null;
+  if(k.U.length){let g=-1e9;for(const ci of k.c)g=Math.max(g,dot(ci,d));sOr=g>0?k.U.reduce((s,u)=>s+dot(u,d)**2,0):0}
+  if(sPos!==null && sOr!==null) return Math.max(0,sPos)*sOr;
+  return sPos!==null ? sPos : sOr;
+}
+
+/* ---------- graph state ---------- */
+let nodes = [], edges = [], nid = 1, view = {x:40,y:20,k:1};
+const world = document.getElementById('world'), svg = document.getElementById('edges'), viewEl = document.getElementById('view');
+const SLOTS = [["positive","POSITIVE","role-pos","--pos"],["not","NOT","role-not","--not"],["any_of","ANY_OF","role-or","--or"]];
+
+function addConcept(text="",x=40,y=40){const n={id:nid++,kind:"concept",text,x,y};nodes.push(n);mountConcept(n);return n}
+function roleOf(n){const e=edges.find(e=>e.from===n.id);return e?e.to:null}
+
+function mountConcept(n){
+  const el=document.createElement('div');el.className='node concept';n.el=el;
+  el.innerHTML=`<div class="hd"><span>Concept</span><span class="tag role-none">unwired</span><span class="x" title="delete">✕</span></div>
+  <div class="bd"><input class="txt" placeholder="e.g. restaurant" spellcheck="false"><div class="vec" title="centered unit vector, 28 dims (demo embedding)"></div>
+  <div class="role"><span class="ov"></span><span class="mono">‖v‖=1</span></div></div><div class="port out" title="drag to a slot"></div>`;
+  el.querySelector('input').value=n.text;
+  el.querySelector('input').addEventListener('input',e=>{n.text=e.target.value;recompute()});
+  el.querySelector('.x').onclick=()=>removeNode(n.id);
+  placeNode(n);world.appendChild(el);
+  header(el,n);
+  wirePort(el.querySelector('.port.out'),n);
+}
+function mountQuery(n){
+  const el=document.createElement('div');el.className='node query';n.el=el;
+  el.innerHTML=`<div class="hd" style="color:var(--out)"><span>Query</span><span class="tag">compile</span></div>
+  ${SLOTS.map(([k,l,c])=>`<div class="slot" data-slot="${k}"><div class="port" data-slot="${k}"></div><b class="${c}">${l}</b><span class="lst">—</span></div>`).join('')}
+  <div class="stats mono"></div><div class="formula mono"></div>`;
+  placeNode(n);world.appendChild(el);header(el,n);
+}
+function mountResults(n){
+  const el=document.createElement('div');el.className='node results';n.el=el;
+  el.innerHTML=`<div class="hd" style="color:var(--out)"><span>Ranked records</span><span class="tag">one _msearch</span></div>
+  <div class="cols"><div class="col b"><h4>Keyword baseline <small>match + must_not</small></h4><div class="rows"></div></div>
+  <div class="col q"><h4>Quantum logic <small>script_score, 1 + s</small></h4><div class="rows"></div></div></div><div class="foot mono"></div>`;
+  placeNode(n);world.appendChild(el);header(el,n);
+}
+function placeNode(n){n.el.style.left=n.x+'px';n.el.style.top=n.y+'px'}
+function header(el,n){
+  const hd=el.querySelector('.hd');
+  hd.addEventListener('pointerdown',ev=>{
+    if(ev.target.classList.contains('x'))return;
+    ev.stopPropagation();hd.setPointerCapture(ev.pointerId);
+    const sx=ev.clientX,sy=ev.clientY,ox=n.x,oy=n.y;
+    const mv=e=>{n.x=ox+(e.clientX-sx)/view.k;n.y=oy+(e.clientY-sy)/view.k;placeNode(n);drawEdges()};
+    const up=()=>{hd.removeEventListener('pointermove',mv);hd.removeEventListener('pointerup',up)};
+    hd.addEventListener('pointermove',mv);hd.addEventListener('pointerup',up);
+  });
+}
+function removeNode(id){const i=nodes.findIndex(n=>n.id===id);if(i<0)return;nodes[i].el.remove();nodes.splice(i,1);edges=edges.filter(e=>e.from!==id);recompute()}
+
+/* wiring */
+let drag=null;
+function wirePort(port,n){
+  port.addEventListener('pointerdown',ev=>{
+    ev.stopPropagation();ev.preventDefault();
+    drag={from:n.id,x:ev.clientX,y:ev.clientY};document.body.setPointerCapture?.(ev.pointerId);
+    window.addEventListener('pointermove',dragMove);window.addEventListener('pointerup',dragEnd,{once:true});
+  });
+}
+function dragMove(e){drag.x=e.clientX;drag.y=e.clientY;document.querySelectorAll('.query .port').forEach(p=>{const r=p.getBoundingClientRect();p.classList.toggle('hot',Math.hypot(e.clientX-(r.x+r.width/2),e.clientY-(r.y+r.height/2))<28)});drawEdges()}
+function dragEnd(e){
+  window.removeEventListener('pointermove',dragMove);
+  let hit=null;
+  document.querySelectorAll('.query .port').forEach(p=>{p.classList.remove('hot');const r=p.getBoundingClientRect();
+    const slot=p.closest('.slot').getBoundingClientRect();
+    if(e.clientX>=slot.left-24&&e.clientX<=slot.right&&e.clientY>=slot.top&&e.clientY<=slot.bottom)hit=p.dataset.slot});
+  if(hit){
+    edges=edges.filter(x=>x.from!==drag.from);
+    if(hit==="positive")edges=edges.filter(x=>x.to!=="positive");
+    edges.push({from:drag.from,to:hit});
+  }
+  drag=null;recompute();
+}
+function portPos(el){const w=world.getBoundingClientRect(),r=el.getBoundingClientRect();return{x:(r.x+r.width/2-w.x)/view.k,y:(r.y+r.height/2-w.y)/view.k}}
+function drawEdges(){
+  svg.innerHTML='';
+  const q=nodes.find(n=>n.kind==="query");
+  const path=(a,b,color,cls)=>{
+    const dx=Math.max(50,Math.abs(b.x-a.x)*.5),p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d',`M${a.x},${a.y} C${a.x+dx},${a.y} ${b.x-dx},${b.y} ${b.x},${b.y}`);
+    p.setAttribute('stroke',color);if(cls)p.setAttribute('stroke-dasharray','6 5');svg.appendChild(p);return p};
+  for(const e of edges){
+    const from=nodes.find(n=>n.id===e.from);if(!from||!q)continue;
+    const a=portPos(from.el.querySelector('.port.out')),b=portPos(q.el.querySelector(`.port[data-slot="${e.to}"]`));
+    const col=getComputedStyle(document.documentElement).getPropertyValue(SLOTS.find(s=>s[0]===e.to)[3]);
+    const p=path(a,b,col);p.onclick=()=>{edges=edges.filter(x=>x!==e);recompute()};
+  }
+  const r=nodes.find(n=>n.kind==="results");
+  if(q&&r){const a={x:q.x+q.el.offsetWidth,y:q.y+24},b={x:r.x,y:r.y+24};path(a,b,getComputedStyle(document.documentElement).getPropertyValue('--out'),true)}
+  if(drag){const from=nodes.find(n=>n.id===drag.from),a=portPos(from.el.querySelector('.port.out')),w=world.getBoundingClientRect();
+    path(a,{x:(drag.x-w.x)/view.k,y:(drag.y-w.y)/view.k},getComputedStyle(document.documentElement).getPropertyValue('--edge'),true)}
+}
+
+/* ---------- recompute ---------- */
+const f2=x=>(x>=0?" ":"")+x.toFixed(2);
+function vecBars(el,v){
+  const box=el.querySelector('.vec');const m=Math.max(...v.map(Math.abs),1e-9);
+  box.innerHTML=Array.from(v,x=>`<i style="height:${Math.max(1,Math.abs(x)/m*100)}%;background:${x>=0?'var(--pos)':'var(--not)'};align-self:${x>=0?'flex-end':'flex-start'}"></i>`).join('');
+}
+function lit(text,words){const s=new Set(tok(text));return words.some(w=>s.has(w))}
+let last=null;
+function recompute(){
+  if(!DOCS)return;
+  const concepts=nodes.filter(n=>n.kind==="concept");
+  const roleTxt={positive:[],not:[],any_of:[]},vec={};
+  for(const n of concepts){
+    const r=roleOf(n),has=tok(n.text).length>0;
+    n.vec=has?embedC(n.text):null;
+    const tag=n.el.querySelector('.tag');tag.textContent=r?SLOTS.find(s=>s[0]===r)[1]:'unwired';
+    tag.className='tag '+(r==='positive'?'role-pos':r==='not'?'role-not':r==='any_of'?'role-or':'role-none');
+    n.el.style.borderColor=r?`var(${SLOTS.find(s=>s[0]===r)[3]})`:'var(--line)';
+    if(n.vec)vecBars(n.el,n.vec);else n.el.querySelector('.vec').innerHTML='';
+    if(r&&has)roleTxt[r].push(n);
+  }
+  const Q=nodes.find(n=>n.kind==="query"),R=nodes.find(n=>n.kind==="results");
+  Q.el.querySelectorAll('.slot').forEach(s=>{const k=s.dataset.slot;s.querySelector('.lst').textContent=roleTxt[k].map(n=>n.text).join(' · ')||'—'});
+  const pos=roleTxt.positive[0]?.vec||null,nots=roleTxt.not.map(n=>n.vec),ors=roleTxt.any_of.map(n=>n.vec);
+  const stats=Q.el.querySelector('.stats'),form=Q.el.querySelector('.formula');
+  const rows=(el,list,fn)=>{el.innerHTML=list.map(fn).join('')};
+  // per-concept overlap badge
+  for(const n of concepts){const o=n.el.querySelector('.ov'),r=roleOf(n);
+    o.innerHTML=(r==='not'&&pos)?`q·r = <b class="mono">${f2(dot(pos,n.vec))}</b>`:(r==='any_of'&&pos?`q·c = <b class="mono">${f2(dot(pos,n.vec))}</b>`:'');}
+  if(!pos&&!ors.length){
+    stats.innerHTML=`<span class="warn">needs a POSITIVE or ANY_OF concept</span>`;form.textContent='';
+    for(const col of R.el.querySelectorAll('.rows'))col.innerHTML='';R.el.querySelector('.foot').textContent='';last=null;drawEdges();return;
+  }
+  const k=compile(pos,nots,ors);
+  let L=[];
+  if(pos&&nots.length)for(const n of roleTxt.not)L.push(`q·r[${n.text}] = <em>${f2(dot(pos,n.vec))}</em>${Math.abs(dot(pos,n.vec))<.05?' <span class="warn">≈0: NOT is a no-op</span>':''}`);
+  if(pos&&nots.length)L.push(`‖Q_N q‖ = <em>${k.qNorm.toFixed(3)}</em> (renormalized)`);
+  if(nots.length>=2){
+    const a=nots[0],b=nots[1],c=dot(a,b),th=Math.acos(Math.max(-1,Math.min(1,c)));
+    L.push(`θ(NOT₁,NOT₂) = <em>${(th*57.2958).toFixed(1)}°</em> · ‖[P,P']‖ = <em>${(Math.abs(c)*Math.sin(th)).toFixed(3)}</em>`);
+    if(pos){
+      const s1=projOut(projOut(pos,[a]),[b]),s2=projOut(projOut(pos,[b]),[a]);
+      L.push(`residual a-part: seq <em>${f2(dot(unit(s1),a))}</em> · reverse-seq <em>${f2(dot(unit(s2),a))}</em> · joint <em>0.00</em>`);
+    }
+  }
+  if(k.dropped)L.push(`<span class="warn">${k.dropped} ANY_OF concept(s) dropped (‖Q_N c‖ &lt; 0.1)</span>`);
+  if(ors.length&&!k.c.length&&!pos)L=[`<span class="warn">every ANY_OF lies inside NOT; nothing to score</span>`];
+  if(ors.length&&!k.c.length&&!pos){stats.innerHTML=`<div>${L[0]}</div>`;form.textContent='';last=null;return}
+  stats.innerHTML=L.map(x=>`<div>${x}</div>`).join('')||'<div>no negation: raw d·q</div>';
+  form.textContent=(pos&&k.U.length)?'s = max(0, d·q′) · ‖Uᵀd‖²  [gate: max c̃·d > 0]':pos?'s = d·q′':'s = ‖Uᵀd‖²  [gate: max c̃·d > 0]';
+
+  // retrieval
+  const posTok=roleTxt.positive[0]?tok(roleTxt.positive[0].text):[];
+  const notTok=roleTxt.not.flatMap(n=>tok(n.text)),orTok=roleTxt.any_of.flatMap(n=>tok(n.text));
+  const kwScore=d=>{if(notTok.some(t=>d.toks.has(t)))return -1;
+    let s=0;for(const t of posTok)if(d.toks.has(t)||d.toks.has(t+'s'))s++;
+    if(orTok.length){const m=orTok.some(t=>d.toks.has(t)||d.toks.has(t+'s'));if(!m)return -1;s+=1}
+    return s>0||(!posTok.length&&orTok.length)?s:-1};
+  const base=DOCS.map(d=>({d,s:kwScore(d)})).filter(x=>x.s>=0).sort((a,b)=>b.s-a.s||a.d.id-b.d.id);
+  const qa=DOCS.map(d=>({d,s:scoreDoc(d.vec,k)})).sort((a,b)=>b.s-a.s||a.d.id-b.d.id);
+  const TOP=8,NV=nots.map(v=>unit(v));
+  // leak: cosine of the doc's authored topic-axis mix with the NOT concept's topic-axis mix (ground truth for the demo)
+  const nTop=roleTxt.not.map(n=>topicVec(n.text));
+  const isLeak=d=>nTop.some(r=>dot(d.topic,r)>LEAK);
+  const fill=(sel,list,max)=>{
+    const el=R.el.querySelector(sel+' .rows');const top=list.slice(0,TOP);const mx=Math.max(...top.map(x=>x.s),1e-9);
+    el.innerHTML=top.length?top.map((x,i)=>`<div class="row${isLeak(x.d)?' leak':''}"><span class="n mono">${i+1}</span><span>${x.d.text}<div class="bar" style="width:${Math.max(2,Math.min(100,x.s/mx*100))}%"></div></span><span class="sc mono">${x.s.toFixed(2)}</span></div>`).join(''):'<div style="color:var(--mute);padding:6px">no hits</div>';
+    return top;
+  };
+  const tb=fill('.col.b',base),tq=fill('.col.q',qa);
+  const leaks=l=>l.filter(x=>isLeak(x.d)).length;
+  R.el.querySelector('.foot').innerHTML=nots.length
+    ?`<span>topic-overlap@${TOP}: baseline <em>${leaks(tb)}</em> · quantum <em>${leaks(tq)}</em></span><span>returned@${TOP}: baseline <em>${tb.length}</em> · quantum <em>${tq.length}</em></span><span>red outline = topic cos ≥ ${LEAK} with a NOT concept</span>`
+    :`<span>no NOT concept wired; overlap metric off</span>`;
+  last={grammar:grammar()};
+  drawEdges();
+}
+function grammar(){
+  const g={not:[],any_of:[]};
+  for(const n of nodes.filter(n=>n.kind==="concept")){const r=roleOf(n);if(!r||!tok(n.text).length)continue;
+    if(r==="positive")g.positive=n.text;else g[r].push(n.text)}
+  return g;
+}
+
+/* ---------- toolbar ---------- */
+const toast=(m)=>{const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',3500)};
+document.getElementById('addC').onclick=()=>{const c=nodes.filter(n=>n.kind==="concept").length;addConcept("",40,40+c*150);recompute()};
+document.getElementById('copy').onclick=async()=>{const s=JSON.stringify(grammar(),null,2);try{await navigator.clipboard.writeText(s);toast('Grammar JSON copied')}catch{toast(s)}};
+document.getElementById('send').onclick=async()=>{
+  const ep=document.getElementById('ep').value.trim();if(!ep)return toast('Set a POST endpoint first. Body: {positive?, not[], any_of[]}');
+  try{const r=await fetch(ep,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(grammar())});
+    const j=await r.json();const hits=j.hits||j.records||j;
+    const el=nodes.find(n=>n.kind==="results").el.querySelector('.col.q .rows');
+    el.innerHTML=(Array.isArray(hits)?hits:[]).slice(0,8).map((h,i)=>`<div class="row"><span class="n mono">${i+1}</span><span>${h.text||h.note||h._source?.note||JSON.stringify(h)}</span><span class="sc mono">${(h.score??h._score??0).toFixed?.(2)||''}</span></div>`).join('')||'<div style="padding:6px;color:var(--mute)">empty</div>';
+    toast('Backend response rendered in the Quantum column')}catch(e){toast('Backend call failed: '+e.message)}
+};
+document.getElementById('theme').onclick=()=>{const d=document.documentElement;const dark=getComputedStyle(d).getPropertyValue('--bg').trim()==='#0f1218';d.dataset.theme=dark?'light':'dark';drawEdges()};
+function layout(){
+  const cs=nodes.filter(n=>n.kind==="concept"),order={positive:0,not:1,any_of:2,null:3};
+  cs.sort((a,b)=>order[roleOf(a)]-order[roleOf(b)]);cs.forEach((n,i)=>{n.x=40;n.y=30+i*150;placeNode(n)});
+  const Q=nodes.find(n=>n.kind==="query"),R=nodes.find(n=>n.kind==="results");Q.x=380;Q.y=30;R.x=Q.x+400;R.y=30;placeNode(Q);placeNode(R);drawEdges();
+}
+function fit(){
+  const w=viewEl.clientWidth,h=viewEl.clientHeight;const R=nodes.find(n=>n.kind==="results");
+  const maxX=R.x+R.el.offsetWidth+40,maxY=Math.max(...nodes.map(n=>n.y+n.el.offsetHeight))+40;
+  view.k=Math.min(1,w/maxX,h/maxY);view.x=16;view.y=16;applyView();
+}
+document.getElementById('layout').onclick=layout;
+document.getElementById('fit').onclick=fit;
+
+function applyView(){world.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.k})`;drawEdges()}
+viewEl.addEventListener('pointerdown',e=>{
+  if(e.target!==viewEl&&e.target!==world&&e.target!==svg)return;
+  viewEl.classList.add('pan');const sx=e.clientX,sy=e.clientY,ox=view.x,oy=view.y;viewEl.setPointerCapture(e.pointerId);
+  const mv=ev=>{view.x=ox+ev.clientX-sx;view.y=oy+ev.clientY-sy;applyView()};
+  const up=()=>{viewEl.classList.remove('pan');viewEl.removeEventListener('pointermove',mv);viewEl.removeEventListener('pointerup',up)};
+  viewEl.addEventListener('pointermove',mv);viewEl.addEventListener('pointerup',up);
+});
+viewEl.addEventListener('wheel',e=>{e.preventDefault();const k0=view.k,k1=Math.min(2,Math.max(.35,k0*(e.deltaY<0?1.1:.9)));
+  const r=viewEl.getBoundingClientRect(),mx=e.clientX-r.x,my=e.clientY-r.y;
+  view.x=mx-(mx-view.x)*(k1/k0);view.y=my-(my-view.y)*(k1/k0);view.k=k1;applyView()},{passive:false});
+
+/* ---------- presets ---------- */
+function reset(){nodes.forEach(n=>n.kind==="concept"&&n.el.remove());nodes=nodes.filter(n=>n.kind!=="concept");edges=[]}
+function preset(name){
+  reset();const P={
+    rats:{pos:"rat",not:["restaurant"],or:[]},
+    chase:{pos:"chase",not:[],or:["hawk","dog"]},
+    order:{pos:"rat",not:["food","restaurant"],or:[]}
+  }[name];if(!P)return;
+  const add=(t,role)=>{const n=addConcept(t,40,0);edges.push({from:n.id,to:role})};
+  add(P.pos,"positive");P.not.forEach(t=>add(t,"not"));P.or.forEach(t=>add(t,"any_of"));
+  layout();recompute();fit();
+}
+document.getElementById('preset').onchange=e=>{preset(e.target.value);e.target.value=''};
+
+/* ---------- boot ---------- */
+buildCorpus();
+const Qn={id:nid++,kind:"query",x:380,y:30},Rn={id:nid++,kind:"results",x:780,y:30};
+nodes.push(Qn,Rn);mountQuery(Qn);mountResults(Rn);
+world.style.width='1px';applyView();
+preset('rats');
+new ResizeObserver(()=>drawEdges()).observe(world);
+window.addEventListener('load',()=>{layout();recompute();fit()});
+</script>
+</body>
+</html>
