@@ -3,94 +3,112 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Quantum NYC Brain Graph</title>
+<title>Quantum NYC Brain</title>
 <style>
 :root{
   color-scheme:dark;
-  --bg:#2b2519; --grid:#3a3322; --panel:#3a3223; --panel2:#4a4030; --line:#6b5e44; --text:#fbf6e6; --mute:#cdc2a3;
-  --pos:#A0C443; --not:#FF3B30; --or:#5DA4DC; --out:#FA500F; --warn:#FFAF00; --edge:#a89a74;
-  --pos2:#66B5AE; --neg2:#D7689D; --sky:#5DA4DC; --sun:#FFD800;
-  --pos-ink:#B5D95A; --not-ink:#FF7A6E; --or-ink:#7DBBF0; --out-ink:#FF9A3C; --warn-ink:#FFC740;
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.3);
+  /* neutral charcoal, no brown cast */
+  --bg:#1c1d21; --grid:#26272d; --panel:#24252b; --panel2:#2e3037; --line:#3d3f48; --text:#f3f1ea; --mute:#a9aab2;
+  /* Mistral rainbow */
+  --m-red:#E10500; --m-od:#FA500F; --m-or:#FF8205; --m-ol:#FFAF00; --m-ye:#FFD800;
+  /* accent six */
+  --a-pink:#D7689D; --a-yellow:#F3D337; --a-lime:#A0C443; --a-teal:#66B5AE; --a-sky:#5DA4DC; --a-navy:#40769E;
+  /* semantic roles */
+  --pos:var(--a-lime); --not:var(--a-pink); --or:var(--a-sky); --out:var(--m-or); --warn:var(--m-ol); --edge:#6a6c78;
+  --neg2:var(--a-pink); --sun:var(--m-ye);
+  --pos-ink:#B9D962; --not-ink:#F08ABA; --or-ink:#86C0EC; --out-ink:#FFA23A; --warn-ink:#FFC43D;
+  --rainbow:linear-gradient(90deg,var(--m-red) 0 20%,var(--m-od) 20% 40%,var(--m-or) 40% 60%,var(--m-ol) 60% 80%,var(--m-ye) 80% 100%);
+  --rainbow-v:linear-gradient(180deg,var(--m-red) 0 20%,var(--m-od) 20% 40%,var(--m-or) 40% 60%,var(--m-ol) 60% 80%,var(--m-ye) 80% 100%);
+  --shadow:0 1px 0 rgba(0,0,0,.6),0 8px 24px rgba(0,0,0,.45);
+  --r:4px;
 }
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.4 "Courier New",Consolas,"Liberation Mono",monospace;overflow:hidden}
-.mono{font-family:"Courier New",Consolas,"Liberation Mono",monospace}
-#bar{position:fixed;top:0;left:0;right:0;height:46px;display:flex;gap:8px;align-items:center;padding:0 16px;background:var(--panel);border-bottom:2px solid var(--sun);z-index:20;overflow-x:auto;white-space:nowrap}
-#bar h1{font-size:15px;color:var(--sun);margin:0 8px 0 0;font-weight:600;letter-spacing:.2px}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.45 "Courier New",Consolas,"Liberation Mono",monospace;overflow:hidden}
+.mono{font-family:inherit}
+.cap{font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+#bar{position:fixed;top:0;left:0;right:0;height:50px;display:flex;gap:10px;align-items:center;padding:0 16px 0 0;background:var(--panel);border-bottom:1px solid var(--line);z-index:20;overflow-x:auto;white-space:nowrap}
+#bar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;background:var(--rainbow)}
+#brand{display:flex;align-items:center;gap:12px;height:100%;padding:0 16px 0 14px;border-right:1px solid var(--line);margin-right:4px}
+#brand .mark{width:22px;height:22px;background:var(--rainbow-v);image-rendering:pixelated;clip-path:polygon(0 0,100% 0,100% 100%,0 100%);box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+#brand h1{font-size:14px;margin:0;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+#brand h1 small{display:block;font-size:9.5px;letter-spacing:.18em;color:var(--mute);font-weight:400;margin-top:1px}
 button,select,input{font:inherit;color:var(--text)}
-button{font-weight:700}
-button{background:var(--panel2);border:1px solid var(--edge);border-radius:6px;padding:5px 10px;cursor:pointer}
-button:hover{border-color:var(--edge)}
-button.primary{background:var(--out);border-color:var(--out);color:#fff}
-.sep{width:1px;height:22px;background:var(--line);margin:0 4px}
-#ep{width:210px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
-#view{position:fixed;inset:46px 0 0 0;cursor:grab;
-  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:32px 32px}
+button{background:transparent;border:1px solid var(--line);border-radius:var(--r);padding:6px 12px;cursor:pointer;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:700}
+button:hover{border-color:var(--text)}
+button.primary{background:var(--m-od);border-color:var(--m-od);color:#fff}
+#ep{width:210px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:5px 8px}
+#view{position:fixed;inset:50px 0 0 0;cursor:grab;
+  background-image:radial-gradient(var(--grid) 1.2px,transparent 1.2px);background-size:24px 24px}
 #view.pan{cursor:grabbing}
 #world{position:absolute;left:0;top:0;transform-origin:0 0}
 #edges{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
-#edges path{fill:none;stroke-width:2.2;pointer-events:stroke;cursor:pointer}
+#edges path{fill:none;stroke-width:2.4;pointer-events:stroke;cursor:pointer}
 #edges path:hover{stroke-width:4}
-.node{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);user-select:none}
-.node .hd{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line);cursor:move;border-radius:10px 10px 0 0;font-weight:600}
-.node .hd .tag{font-size:10px;font-weight:600;padding:1px 6px;border-radius:9px;border:1px solid currentColor}
-.node .hd .x{margin-left:auto;cursor:pointer;color:var(--mute);padding:0 4px}
-.node .bd{padding:9px 10px}
+.node{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);user-select:none}
+.node .hd{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:move;font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;position:relative}
+.node .hd::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent,var(--edge))}
+.node .hd .tag{font-size:9.5px;font-weight:700;padding:2px 6px;border-radius:2px;letter-spacing:.1em;background:var(--accent,var(--edge));color:#111}
+.node .hd .x{margin-left:auto;cursor:pointer;color:var(--mute);padding:0 4px;font-weight:400}
+.node .bd{padding:10px}
 .concept{width:230px}
-.concept input.txt{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
-.concept input.txt:focus{outline:2px solid var(--or);outline-offset:-1px}
+.concept input.txt{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:7px 8px;font-size:14px}
+.concept input.txt:focus{outline:2px solid var(--accent,var(--or));outline-offset:-1px}
 .vec{display:flex;align-items:center;height:30px;gap:1px;margin-top:8px}
 .vec i{display:block;flex:1;background:var(--edge);min-height:1px}
-.role{margin-top:6px;font-size:11px;color:var(--mute);display:flex;justify-content:space-between}
-.port{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--panel);border:2px solid var(--edge);cursor:crosshair;z-index:3}
+.role{margin-top:6px;font-size:10.5px;color:var(--mute);display:flex;justify-content:space-between}
+.port{position:absolute;width:12px;height:12px;border-radius:2px;transform:rotate(45deg);background:var(--panel);border:2px solid var(--edge);cursor:crosshair;z-index:3}
 .port:hover,.port.hot{background:var(--text)}
-.port.out{right:-8px;top:50%;margin-top:-7px}
-.query{width:340px}
-.slot{position:relative;display:flex;align-items:center;gap:8px;padding:6px 10px 6px 14px;border-bottom:1px dashed var(--line)}
-.slot .port{left:-8px;top:50%;margin-top:-7px}
-.slot b{width:64px}
+.port.out{right:-7px;top:50%;margin-top:-6px}
+.query{width:340px;--accent:var(--m-or)}
+.results{width:600px;--accent:var(--m-ye)}
+.slot{position:relative;display:flex;align-items:center;gap:8px;padding:7px 10px 7px 14px;border-bottom:1px dashed var(--line)}
+.slot .port{left:-7px;top:50%;margin-top:-6px}
+.slot b{width:64px;font-size:11px;letter-spacing:.1em}
 .slot span{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stats{padding:8px 10px;font-size:11.5px;color:var(--mute);display:grid;gap:3px}
 .stats em{font-style:normal;color:var(--text)}
 .stats .warn{color:var(--warn-ink)}
-.formula{margin:0 10px 10px;padding:6px 8px;background:var(--panel2);border-radius:6px;font-size:11.5px}
-.results{width:600px}
+.formula{margin:0 10px 10px;padding:6px 8px;background:var(--bg);border:1px solid var(--line);border-left:3px solid var(--m-or);border-radius:var(--r);font-size:11.5px;color:var(--out-ink)}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:0}
 .col{padding:8px 10px}
 .col+.col{border-left:1px solid var(--line)}
-.col h4{margin:0 0 6px;font-size:12px;display:flex;justify-content:space-between;align-items:baseline}
-.col h4 small{font-weight:400;color:var(--mute)}
-.row{display:grid;grid-template-columns:18px 1fr 44px;gap:6px;padding:4px 6px;border-radius:6px;font-size:12px;align-items:start}
+.col h4{margin:0 0 6px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:baseline}
+.col h4 small{font-weight:400;color:var(--mute);text-transform:none;letter-spacing:0}
+.col.b h4{color:var(--mute)}.col.q h4{color:var(--m-ye)}
+.row{display:grid;grid-template-columns:18px 1fr 44px;gap:6px;padding:5px 6px;border-radius:2px;font-size:12px;align-items:start}
 .row:nth-child(even){background:var(--panel2)}
-.row.leak{outline:1px solid var(--not);outline-offset:-1px;background:color-mix(in srgb,var(--not) 26%,transparent)}
+.row.leak{box-shadow:inset 3px 0 0 var(--a-pink);background:color-mix(in srgb,var(--a-pink) 16%,transparent)}
 .row .n{color:var(--mute)}
 .row .sc{text-align:right;color:var(--mute)}
-.row .bar{height:3px;background:var(--out);border-radius:2px;margin-top:3px}
-.foot{padding:7px 10px;border-top:1px solid var(--line);font-size:11.5px;color:var(--mute);display:flex;gap:14px;flex-wrap:wrap}
+.row .bar{height:3px;background:var(--rainbow);border-radius:1px;margin-top:4px}
+.col.b .row .bar{background:var(--edge)}
+.foot{padding:7px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--mute);display:flex;gap:14px;flex-wrap:wrap}
 .foot em{font-style:normal;color:var(--text)}
 .role-pos{color:var(--pos-ink)}.role-not{color:var(--not-ink)}.role-or{color:var(--or-ink)}.role-none{color:var(--mute)}
-#hint-unused{position:fixed;left:16px;bottom:12px;color:var(--mute);font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px;z-index:10}
-#toast{position:fixed;right:16px;bottom:12px;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;box-shadow:var(--shadow);display:none;z-index:30;font-size:12px}
-#settings{position:fixed;top:46px;right:16px;z-index:25;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:10px 12px;display:grid;gap:8px;width:min(420px,calc(100vw - 32px))}
+#toast{position:fixed;right:16px;bottom:12px;max-width:420px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--m-or);border-radius:var(--r);padding:8px 12px;box-shadow:var(--shadow);display:none;z-index:30;font-size:12px}
+#settings{position:fixed;top:54px;right:16px;z-index:25;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:10px 12px;display:grid;gap:8px;width:min(420px,calc(100vw - 32px))}
 #settings[hidden]{display:none}
-#settings label{display:grid;gap:3px;font-size:11.5px;color:var(--mute)}
-#settings input{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:100%}
+#settings label{display:grid;gap:3px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+#settings input{background:var(--bg);border:1px solid var(--line);border-radius:var(--r);padding:6px 8px;width:100%;text-transform:none;letter-spacing:0;font-size:12px}
 #settings small{color:var(--mute)}
 #chat{position:fixed;left:50%;transform:translateX(-50%);width:min(680px,calc(100vw - 32px));z-index:15;transition:top .5s,bottom .5s}
 #chat.empty{top:calc(50% - 30px)}
 #chat:not(.empty){bottom:14px}
-#cf{display:flex;gap:8px;background:var(--panel);border:2px solid var(--sun);border-radius:14px;box-shadow:var(--shadow);padding:8px}
+#cf{position:relative;display:flex;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:8px 8px 8px 12px}
+#cf::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--rainbow-v)}
 #cf input{flex:1;background:transparent;border:0;padding:8px 10px;font-size:15px;outline:none}
-#cf:focus-within{border-color:var(--out)}
-#go{background:var(--out);border-color:var(--out);color:#fff;border-radius:10px;padding:4px 14px}
-#steps{display:grid;gap:3px;margin-bottom:8px;font-size:11.5px;color:var(--mute);background:color-mix(in srgb,var(--panel) 94%,transparent);border-radius:8px}
+#cf input::placeholder{color:var(--mute)}
+#cf:focus-within{border-color:var(--m-ye)}
+#go{background:var(--m-od);border-color:var(--m-od);color:#fff;border-radius:var(--r);padding:4px 14px;font-size:14px}
+#tagline{text-align:center;color:var(--mute);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin-top:12px}
+#chat:not(.empty) #tagline{display:none}
+#steps{display:grid;gap:2px;margin-bottom:8px;font-size:11.5px;color:var(--mute);background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid var(--line);border-radius:var(--r);padding:4px 0}
 #steps:empty{display:none}
 #steps .st{display:grid;grid-template-columns:16px 78px 1fr;gap:6px;padding:3px 10px;align-items:baseline}
 #steps .st i{font-style:normal;color:var(--mute)}
-#steps .st.done i{color:var(--pos)}
-#steps .st.fail i{color:var(--not)}
-#steps .st b{color:var(--text);font-weight:600}
+#steps .st.done i{color:var(--a-lime)}
+#steps .st.fail i{color:var(--m-red)}
+#steps .st b{color:var(--text);font-weight:700;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase}
 #steps .st span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #steps .st:not(.done):not(.fail) i{animation:pulse 1s infinite}
 @keyframes pulse{50%{opacity:.25}}
@@ -103,7 +121,7 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
 </head>
 <body>
 <div id="bar">
-  <h1>Quantum NYC Brain</h1>
+  <div id="brand"><div class="mark"></div><h1>Quantum NYC Brain<small>quantum logic · elastic × mistral</small></h1></div>
   <span style="flex:1"></span>
   <button id="copy">Copy grammar JSON</button>
   <button id="gear" aria-label="backend settings">Backends</button>
@@ -118,6 +136,7 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
 <div id="chat" class="empty">
   <div id="steps" class="mono"></div>
   <form id="cf" autocomplete="off"><input id="q" placeholder="Ask the city…  e.g. rats but not restaurants" aria-label="query"><button id="go" type="button" aria-label="send">↵</button></form>
+  <div id="tagline">negation as orthogonal complement · one _msearch · ranked records</div>
 </div>
 <div id="toast"></div>
 
@@ -242,7 +261,7 @@ function roleOf(n){const e=edges.find(e=>e.from===n.id);return e?e.to:null}
 
 function mountConcept(n){
   const el=document.createElement('div');el.className='node concept';n.el=el;
-  el.innerHTML=`<div class="hd"><span>Concept</span><span class="tag role-none">unwired</span><span class="x" title="delete">✕</span></div>
+  el.innerHTML=`<div class="hd"><span>Concept</span><span class="tag">unwired</span><span class="x" title="delete">✕</span></div>
   <div class="bd"><input class="txt" placeholder="e.g. restaurant" spellcheck="false"><div class="vec" title="centered unit vector, 28 dims (demo embedding)"></div>
   <div class="role"><span class="ov"></span><span class="mono">‖v‖=1</span></div></div><div class="port out" title="drag to a slot"></div>`;
   el.querySelector('input').value=n.text;
@@ -254,14 +273,14 @@ function mountConcept(n){
 }
 function mountQuery(n){
   const el=document.createElement('div');el.className='node query';n.el=el;
-  el.innerHTML=`<div class="hd" style="color:var(--out-ink)"><span>Query</span><span class="tag">compile</span></div>
+  el.innerHTML=`<div class="hd"><span>Query</span><span class="tag">compile</span></div>
   ${SLOTS.map(([k,l,c])=>`<div class="slot" data-slot="${k}"><div class="port" data-slot="${k}"></div><b class="${c}">${l}</b><span class="lst">—</span></div>`).join('')}
   <div class="stats mono"></div><div class="formula mono"></div>`;
   placeNode(n);world.appendChild(el);header(el,n);
 }
 function mountResults(n){
   const el=document.createElement('div');el.className='node results';n.el=el;
-  el.innerHTML=`<div class="hd" style="color:var(--out-ink)"><span>Ranked records</span><span class="tag">one _msearch</span></div>
+  el.innerHTML=`<div class="hd"><span>Ranked records</span><span class="tag">one _msearch</span></div>
   <div class="cols"><div class="col b"><h4>Keyword baseline <small>match + must_not</small></h4><div class="rows"></div></div>
   <div class="col q"><h4>Quantum logic <small>script_score, 1 + s</small></h4><div class="rows"></div></div></div><div class="foot mono"></div>`;
   placeNode(n);world.appendChild(el);header(el,n);
@@ -340,8 +359,8 @@ function recompute(){
     const r=roleOf(n),has=tok(n.text).length>0;
     n.vec=has?embedC(n.text):null;
     const tag=n.el.querySelector('.tag');tag.textContent=r?SLOTS.find(s=>s[0]===r)[1]:'unwired';
-    tag.className='tag '+(r==='positive'?'role-pos':r==='not'?'role-not':r==='any_of'?'role-or':'role-none');
-    n.el.style.borderColor=r?`var(${SLOTS.find(s=>s[0]===r)[3]})`:'var(--line)';
+    
+    n.el.style.setProperty('--accent',r?`var(${SLOTS.find(s=>s[0]===r)[3]})`:'var(--edge)');n.el.style.borderColor=r?`color-mix(in srgb,var(${SLOTS.find(s=>s[0]===r)[3]}) 55%,var(--line))`:'var(--line)';
     if(n.vec)vecBars(n.el,n.vec);else n.el.querySelector('.vec').innerHTML='';
     if(r&&has)roleTxt[r].push(n);
   }
@@ -396,7 +415,7 @@ function recompute(){
   const tb=fill('.col.b',base),tq=fill('.col.q',qa);
   const leaks=l=>l.filter(x=>isLeak(x.d)).length;
   R.el.querySelector('.foot').innerHTML=nots.length
-    ?`<span>topic-overlap@${TOP}: baseline <em>${leaks(tb)}</em> · quantum <em>${leaks(tq)}</em></span><span>returned@${TOP}: baseline <em>${tb.length}</em> · quantum <em>${tq.length}</em></span><span>red outline = topic cos ≥ ${LEAK} with a NOT concept</span>`
+    ?`<span>topic-overlap@${TOP}: baseline <em>${leaks(tb)}</em> · quantum <em>${leaks(tq)}</em></span><span>returned@${TOP}: baseline <em>${tb.length}</em> · quantum <em>${tq.length}</em></span><span>pink bar = topic cos ≥ ${LEAK} with a NOT concept</span>`
     :`<span>no NOT concept wired; overlap metric off</span>`;
   last={grammar:grammar()};
   drawEdges();
