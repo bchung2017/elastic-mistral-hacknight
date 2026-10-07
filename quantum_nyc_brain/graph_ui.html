@@ -74,32 +74,56 @@ button.primary{background:var(--out);border-color:var(--out);color:#fff}
 .foot{padding:7px 10px;border-top:1px solid var(--line);font-size:11.5px;color:var(--mute);display:flex;gap:14px;flex-wrap:wrap}
 .foot em{font-style:normal;color:var(--text)}
 .role-pos{color:var(--pos)}.role-not{color:var(--not)}.role-or{color:var(--or)}.role-none{color:var(--mute)}
-#hint{position:fixed;left:16px;bottom:12px;color:var(--mute);font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px;z-index:10}
+#hint-unused{position:fixed;left:16px;bottom:12px;color:var(--mute);font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 9px;z-index:10}
 #toast{position:fixed;right:16px;bottom:12px;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px;box-shadow:var(--shadow);display:none;z-index:30;font-size:12px}
-@media (max-width:700px){#hint{display:none}}
+#settings{position:fixed;top:46px;right:16px;z-index:25;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);padding:10px 12px;display:grid;gap:8px;width:min(420px,calc(100vw - 32px))}
+#settings[hidden]{display:none}
+#settings label{display:grid;gap:3px;font-size:11.5px;color:var(--mute)}
+#settings input{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:100%}
+#settings small{color:var(--mute)}
+#chat{position:fixed;left:50%;transform:translateX(-50%);width:min(680px,calc(100vw - 32px));z-index:15;transition:top .5s,bottom .5s}
+#chat.empty{top:calc(50% - 30px)}
+#chat:not(.empty){bottom:14px}
+#cf{display:flex;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:8px}
+#cf input{flex:1;background:transparent;border:0;padding:8px 10px;font-size:15px;outline:none}
+#cf:focus-within{border-color:var(--out)}
+#go{background:var(--out);border-color:var(--out);color:#fff;border-radius:10px;padding:4px 14px}
+#steps{display:grid;gap:3px;margin-bottom:8px;font-size:11.5px;color:var(--mute);background:color-mix(in srgb,var(--panel) 92%,transparent);border-radius:8px}
+#steps:empty{display:none}
+#steps .st{display:grid;grid-template-columns:16px 78px 1fr;gap:6px;padding:3px 10px;align-items:baseline}
+#steps .st i{font-style:normal;color:var(--mute)}
+#steps .st.done i{color:var(--pos)}
+#steps .st.fail i{color:var(--not)}
+#steps .st b{color:var(--text);font-weight:600}
+#steps .st span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#steps .st:not(.done):not(.fail) i{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.node{transition:opacity .4s,transform .4s}
+.node.hidden{display:none}
+.node.enter{opacity:0;transform:translateY(8px) scale(.97)}
+.node.dim{opacity:.18;filter:saturate(.3)}
+@media (prefers-reduced-motion:reduce){.node,#chat{transition:none}}
 </style>
 </head>
 <body>
 <div id="bar">
   <h1>Quantum NYC Brain</h1>
-  <button id="addC">+ Concept</button>
-  <select id="preset">
-    <option value="">Presets…</option>
-    <option value="rats">rats NOT restaurant (paraphrase leak)</option>
-    <option value="chase">chase AND (hawk OR dog)</option>
-    <option value="order">rat NOT food, restaurant (joint vs sequential)</option>
-  </select>
-  <button id="layout">Auto-layout</button>
-  <button id="fit">Fit</button>
-  <span class="sep"></span>
+  <span style="flex:1"></span>
   <button id="copy">Copy grammar JSON</button>
-  <input id="ep" class="mono" placeholder="POST endpoint (optional)" aria-label="backend endpoint">
-  <button id="send" class="primary">Run on backend</button>
+  <button id="gear" aria-label="backend settings">Backends</button>
   <button id="theme" aria-label="toggle theme">Theme</button>
+</div>
+<div id="settings" hidden>
+  <label>Parse endpoint <input id="pep" class="mono" placeholder="POST {query} → {positive?, not[], any_of[]}"></label>
+  <label>Search endpoint <input id="ep" class="mono" placeholder="POST grammar → ranked records"></label>
+  <small>Both empty: built-in heuristic parser and demo embeddings (no Mistral, no Elasticsearch).</small>
 </div>
 
 <div id="view"><div id="world"><svg id="edges"></svg></div></div>
-<div id="hint">drag header to move · drag a port dot onto a slot to wire · click a wire to cut · wheel zooms · drag background pans</div>
+<div id="chat" class="empty">
+  <div id="steps" class="mono"></div>
+  <form id="cf" autocomplete="off"><input id="q" placeholder="Ask the city…  e.g. rats but not restaurants" aria-label="query"><button id="go" aria-label="send">↵</button></form>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -121,12 +145,12 @@ const LEX = {
 const COMMON = 12;  // shared anisotropic direction, removed by centering
 function h32(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
 function rng(seed){let a=seed;return()=>{a=(a+0x6D2B79F5)|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
-function topicVec(text){const v=new Float64Array(AX.length);for(const t of tok(text)){const w=LEX[t];if(w)for(const k in w)if(k<AX.length)v[k]+=w[k]}return unit(v)}
+function topicVec(text){const v=new Float64Array(AX.length);for(const t of tok(text)){const w=LEX[t]||LEX[t.replace(/s$/,'')];if(w)for(const k in w)if(k<AX.length)v[k]+=w[k]}return unit(v)}
 const tok = s => s.toLowerCase().match(/[a-z]+/g) || [];
 function rawEmbed(text){
   const v = new Float64Array(D); const ts = tok(text); if(!ts.length) return v;
   for(const t of ts){
-    const w = LEX[t]; if(w) for(const k in w) v[k]+=w[k];
+    const w = LEX[t]||LEX[t.replace(/s$/,'')]; if(w) for(const k in w) v[k]+=w[k];
     const r = rng(h32(t)); for(let j=AX.length+1;j<D;j++) v[j]+=(r()-.5)*.5;
   }
   for(let j=0;j<D;j++) v[j]/=ts.length;
@@ -287,6 +311,7 @@ function dragEnd(e){
 function portPos(el){const w=world.getBoundingClientRect(),r=el.getBoundingClientRect();return{x:(r.x+r.width/2-w.x)/view.k,y:(r.y+r.height/2-w.y)/view.k}}
 function drawEdges(){
   svg.innerHTML='';
+  if(nodes.find(n=>n.kind==="query")?.el.classList.contains('hidden'))return;
   const q=nodes.find(n=>n.kind==="query");
   const path=(a,b,color,cls)=>{
     const dx=Math.max(50,Math.abs(b.x-a.x)*.5),p=document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -296,7 +321,7 @@ function drawEdges(){
     const from=nodes.find(n=>n.id===e.from);if(!from||!q)continue;
     const a=portPos(from.el.querySelector('.port.out')),b=portPos(q.el.querySelector(`.port[data-slot="${e.to}"]`));
     const col=getComputedStyle(document.documentElement).getPropertyValue(SLOTS.find(s=>s[0]===e.to)[3]);
-    const p=path(a,b,col);p.onclick=()=>{edges=edges.filter(x=>x!==e);recompute()};
+    const p=path(a,b,col);if(e.fresh){delete e.fresh;const L=p.getTotalLength();p.style.strokeDasharray=L;p.style.strokeDashoffset=L;p.getBoundingClientRect();p.style.transition='stroke-dashoffset .45s ease';p.style.strokeDashoffset=0}p.onclick=()=>{edges=edges.filter(x=>x!==e);recompute()};
   }
   const r=nodes.find(n=>n.kind==="results");
   if(q&&r){const a={x:q.x+q.el.offsetWidth,y:q.y+24},b={x:r.x,y:r.y+24};path(a,b,getComputedStyle(document.documentElement).getPropertyValue('--out'),true)}
@@ -390,16 +415,7 @@ function grammar(){
 
 /* ---------- toolbar ---------- */
 const toast=(m)=>{const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',3500)};
-document.getElementById('addC').onclick=()=>{const c=nodes.filter(n=>n.kind==="concept").length;addConcept("",40,40+c*150);recompute()};
 document.getElementById('copy').onclick=async()=>{const s=JSON.stringify(grammar(),null,2);try{await navigator.clipboard.writeText(s);toast('Grammar JSON copied')}catch{toast(s)}};
-document.getElementById('send').onclick=async()=>{
-  const ep=document.getElementById('ep').value.trim();if(!ep)return toast('Set a POST endpoint first. Body: {positive?, not[], any_of[]}');
-  try{const r=await fetch(ep,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(grammar())});
-    const j=await r.json();const hits=j.hits||j.records||j;
-    const el=nodes.find(n=>n.kind==="results").el.querySelector('.col.q .rows');
-    el.innerHTML=(Array.isArray(hits)?hits:[]).slice(0,8).map((h,i)=>`<div class="row"><span class="n mono">${i+1}</span><span>${h.text||h.note||h._source?.note||JSON.stringify(h)}</span><span class="sc mono">${(h.score??h._score??0).toFixed?.(2)||''}</span></div>`).join('')||'<div style="padding:6px;color:var(--mute)">empty</div>';
-    toast('Backend response rendered in the Quantum column')}catch(e){toast('Backend call failed: '+e.message)}
-};
 document.getElementById('theme').onclick=()=>{const d=document.documentElement;const dark=getComputedStyle(d).getPropertyValue('--bg').trim()==='#0f1218';d.dataset.theme=dark?'light':'dark';drawEdges()};
 function layout(){
   const cs=nodes.filter(n=>n.kind==="concept"),order={positive:0,not:1,any_of:2,null:3};
@@ -407,12 +423,10 @@ function layout(){
   const Q=nodes.find(n=>n.kind==="query"),R=nodes.find(n=>n.kind==="results");Q.x=380;Q.y=30;R.x=Q.x+400;R.y=30;placeNode(Q);placeNode(R);drawEdges();
 }
 function fit(){
-  const w=viewEl.clientWidth,h=viewEl.clientHeight;const R=nodes.find(n=>n.kind==="results");
+  const w=viewEl.clientWidth,h=viewEl.clientHeight-(stepsEl.offsetHeight+100);const R=nodes.find(n=>n.kind==="results");
   const maxX=R.x+R.el.offsetWidth+40,maxY=Math.max(...nodes.map(n=>n.y+n.el.offsetHeight))+40;
   view.k=Math.min(1,w/maxX,h/maxY);view.x=16;view.y=16;applyView();
 }
-document.getElementById('layout').onclick=layout;
-document.getElementById('fit').onclick=fit;
 
 function applyView(){world.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.k})`;drawEdges()}
 viewEl.addEventListener('pointerdown',e=>{
@@ -426,28 +440,80 @@ viewEl.addEventListener('wheel',e=>{e.preventDefault();const k0=view.k,k1=Math.m
   const r=viewEl.getBoundingClientRect(),mx=e.clientX-r.x,my=e.clientY-r.y;
   view.x=mx-(mx-view.x)*(k1/k0);view.y=my-(my-view.y)*(k1/k0);view.k=k1;applyView()},{passive:false});
 
-/* ---------- presets ---------- */
 function reset(){nodes.forEach(n=>n.kind==="concept"&&n.el.remove());nodes=nodes.filter(n=>n.kind!=="concept");edges=[]}
-function preset(name){
-  reset();const P={
-    rats:{pos:"rat",not:["restaurant"],or:[]},
-    chase:{pos:"chase",not:[],or:["hawk","dog"]},
-    order:{pos:"rat",not:["food","restaurant"],or:[]}
-  }[name];if(!P)return;
-  const add=(t,role)=>{const n=addConcept(t,40,0);edges.push({from:n.id,to:role})};
-  add(P.pos,"positive");P.not.forEach(t=>add(t,"not"));P.or.forEach(t=>add(t,"any_of"));
-  layout();recompute();fit();
+
+/* ---------- chat-driven pipeline ---------- */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const stepsEl=document.getElementById('steps'),chatEl=document.getElementById('chat'),qIn=document.getElementById('q');
+function step(name,detail){
+  const el=document.createElement('div');el.className='st';el.innerHTML=`<i>●</i><b>${name}</b><span></span>`;
+  el.querySelector('span').textContent=detail;stepsEl.appendChild(el);
+  return{done:d=>{el.className='st done';el.firstChild.textContent='✓';if(d!=null)el.querySelector('span').textContent=d},
+         fail:d=>{el.className='st fail';el.firstChild.textContent='✕';el.querySelector('span').textContent=d}};
 }
-document.getElementById('preset').onchange=e=>{preset(e.target.value);e.target.value=''};
+const STOP=new Set("the a an of in on at with for to about stories story show me find give any all some that those these please squirrel squirrels".split(" ")); // squirrel* stripped: the whole corpus is squirrel stories
+const clean=t=>tok(t).filter(w=>!STOP.has(w)).join(' ');
+function heuristicParse(text){
+  const m=text.toLowerCase().split(/\b(?:but\s+not|and\s+not|not|without|except|excluding|minus)\b/);
+  const head=m[0],negs=m.slice(1).join(' ').split(/,|\band\b|\bor\b|\bnor\b/).map(clean).filter(Boolean);
+  const g={not:negs,any_of:[]};
+  const parts=head.split(/\band\b/);
+  const orSplit=t=>t.split(/\bor\b|,/).map(clean).filter(Boolean);
+  if(parts.length>1){const p=clean(parts[0]);if(p)g.positive=p;g.any_of=orSplit(parts.slice(1).join(' '))}
+  else if(/\bor\b|,/.test(head))g.any_of=orSplit(head);
+  else{const p=clean(head);if(p)g.positive=p}
+  return g;
+}
+async function parseQuery(text){
+  const ep=document.getElementById('pep').value.trim();
+  if(ep){const r=await fetch(ep,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({query:text})});const j=await r.json();return{not:j.not||[],any_of:j.any_of||[],positive:j.positive||undefined}}
+  await sleep(450);return heuristicParse(text);
+}
+let busy=false;
+async function runQuery(text){
+  if(busy)return;busy=true;document.getElementById('go').disabled=true;
+  chatEl.classList.remove('empty');stepsEl.innerHTML='';
+  const Q=nodes.find(n=>n.kind==="query"),R=nodes.find(n=>n.kind==="results");
+  reset();
+  Q.el.classList.remove('hidden');Q.el.classList.add('enter');R.el.classList.remove('hidden');R.el.classList.add('dim');
+  layout();requestAnimationFrame(()=>Q.el.classList.remove('enter'));fit();
+  try{
+    let s=step('Parse','Mistral → logic grammar');
+    const g=await parseQuery(text);
+    if(!g.positive&&!g.any_of.length){s.fail('no positive or any_of concept found; rephrase');return}
+    s.done(JSON.stringify(g));
+    s=step('Embed',`${[g.positive,...g.not,...g.any_of].filter(Boolean).length} concepts → centered unit vectors`);
+    const list=[];if(g.positive)list.push([g.positive,'positive']);g.not.forEach(t=>list.push([t,'not']));g.any_of.forEach(t=>list.push([t,'any_of']));
+    const made=[];
+    for(const [t,role] of list){const n=addConcept(t,40,0);n.el.classList.add('enter');made.push([n,role]);layout();recompute();fit();await sleep(30);n.el.classList.remove('enter');await sleep(320)}
+    s.done('mistral-embed(demo vectors) − μ, normalized');
+    s=step('Compile','project NOT out of every concept (joint, order-free)');
+    for(const [n,role] of made.sort((a,b)=>["not","positive","any_of"].indexOf(a[1])-["not","positive","any_of"].indexOf(b[1]))){
+      edges.push({from:n.id,to:role,fresh:true});recompute();await sleep(500)}
+    const qs=document.querySelector('.query .stats').innerText.split('\n').filter(Boolean);
+    s.done(g.not.length?`NOT subspace removed; ${qs.find(x=>x.startsWith('q·r'))||''}`:'no negation; raw d·q');
+    s=step('Retrieve','script_score, exact, one _msearch with must_not baseline');
+    R.el.classList.remove('dim');fit();await sleep(400);
+    const sep=document.getElementById('ep').value.trim();
+    if(sep){try{await backendSearch(sep,grammar())}catch(e){toast('Search endpoint failed: '+e.message)}}
+    s.done(sep?'ranked records from backend (quantum column)':'ranked records (demo corpus, local scoring)');
+  }catch(e){const f=stepsEl.querySelector('.st:not(.done):not(.fail)');f?f.className='st fail':0;toast('Pipeline error: '+e.message)}
+  finally{busy=false;document.getElementById('go').disabled=false;qIn.focus()}
+}
+async function backendSearch(ep,g){
+  const r=await fetch(ep,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(g)});
+  const j=await r.json();const hits=j.hits||j.records||j;
+  nodes.find(n=>n.kind==="results").el.querySelector('.col.q .rows').innerHTML=(Array.isArray(hits)?hits:[]).slice(0,8).map((h,i)=>`<div class="row"><span class="n mono">${i+1}</span><span>${h.text||h.note||h._source?.note||JSON.stringify(h)}</span><span class="sc mono">${(h.score??h._score??0).toFixed(2)}</span></div>`).join('')||'<div style="padding:6px;color:var(--mute)">empty</div>';
+}
+document.getElementById('cf').onsubmit=e=>{e.preventDefault();const t=qIn.value.trim();if(t){runQuery(t);qIn.value=''}};
+document.getElementById('gear').onclick=()=>{const p=document.getElementById('settings');p.hidden=!p.hidden};
 
 /* ---------- boot ---------- */
 buildCorpus();
 const Qn={id:nid++,kind:"query",x:380,y:30},Rn={id:nid++,kind:"results",x:780,y:30};
 nodes.push(Qn,Rn);mountQuery(Qn);mountResults(Rn);
-world.style.width='1px';applyView();
-preset('rats');
-new ResizeObserver(()=>drawEdges()).observe(world);
-window.addEventListener('load',()=>{layout();recompute();fit()});
+Qn.el.classList.add('hidden');Rn.el.classList.add('hidden');
+applyView();qIn.focus();
 </script>
 </body>
 </html>
