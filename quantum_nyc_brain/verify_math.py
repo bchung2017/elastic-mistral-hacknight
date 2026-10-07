@@ -104,5 +104,61 @@ qq = unit(rng.normal(size=D) + paras.sum(0))
 res_sub = np.abs(paras @ ((I - Pk) @ qq)).mean()
 res_mean = np.abs(paras @ ((I - np.outer(m, m)) @ qq)).mean()
 assert res_sub < res_mean
+# ---- Query semantics (MATH.md §7) ----
+
+
+def orth(vecs, eps=0.1):
+    """Orthonormal basis of span(vecs), dropping vectors with norm < eps."""
+    vecs = [v for v in vecs if np.linalg.norm(v) >= eps]
+    if not vecs:
+        return np.zeros((D, 0))
+    Q, _ = np.linalg.qr(np.stack(vecs, axis=1))
+    return Q
+
+
+def score(d, positive=None, not_=(), any_of=()):
+    N = orth(not_)
+    QN = I - N @ N.T
+    s_pos = s_or = None
+    if positive is not None:
+        qp = QN @ positive
+        s_pos = d @ (qp / np.linalg.norm(qp))
+    if any_of:
+        ct = [QN @ c for c in any_of]
+        U = orth(ct)
+        s_or = float(np.sum((U.T @ d) ** 2)) if sum(c @ d for c in ct) > 0 else 0.0
+    if s_pos is not None and s_or is not None:
+        return max(0.0, s_pos) * s_or
+    return s_pos if s_pos is not None else s_or
+
+
+n1 = unit(rng.normal(size=D))
+c1 = unit(unit(rng.normal(size=D)) + 1.5 * n1)  # OR concept entangled with the negated concept
+c2 = unit(rng.normal(size=D))
+
+# 13. Script score 1 + s is non-negative for s in [-1, 1] and order-preserving
+ss = np.array([-1.0, -0.3, 0.0, 0.4, 1.0])
+assert np.all(1 + ss >= 0) and np.all(np.diff(1 + ss) > 0)
+
+# 14. Without projecting OR concepts through NOT, OR re-admits the negated concept;
+#     with it, a doc purely along n1 scores 0
+U_raw = orth([c1, c2])
+assert np.sum((U_raw.T @ n1) ** 2) > 0.1
+assert np.isclose(score(n1, not_=[n1], any_of=[c1, c2]), 0.0)
+assert np.allclose(orth([(I - np.outer(n1, n1)) @ c for c in (c1, c2)]).T @ n1, 0)
+
+# 15. Ungated subspace score is sign-blind; gated score zeroes the anti-aligned doc
+d_al = unit(c1 + c2)
+U2 = orth([c1, c2])
+assert np.isclose(np.sum((U2.T @ d_al) ** 2), np.sum((U2.T @ -d_al) ** 2))
+assert score(d_al, any_of=[c1, c2]) > 0.5 and score(-d_al, any_of=[c1, c2]) == 0.0
+
+# 16. Combined score lies in [0, 1]; pure-positive score lies in [-1, 1]
+for _ in range(200):
+    dd = unit(rng.normal(size=D))
+    sc = score(dd, positive=q, not_=[n1], any_of=[c1, c2])
+    assert 0.0 <= sc <= 1.0
+    assert -1.0 <= score(dd, positive=q, not_=[n1]) <= 1.0
+
 print(f"all checks pass | raw mean cos {raw_cos:.2f} -> centered {cen_cos:.3f} | "
       f"paraphrase leakage: mean-vector {res_mean:.3f} vs rank-4 subspace {res_sub:.3f}")

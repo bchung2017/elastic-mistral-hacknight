@@ -10,8 +10,8 @@ Dropped: the autonomous ETL agent (mapping generation, self-repair, catalog). Da
 
 1. **Input:** a natural-language query.
 2. **Parse:** Mistral → logic expression of concepts + filters.
-3. **Compile:** concepts → subspaces → projectors (MATH.md). NOT compiles to one query vector q′. OR does not: it's span membership, score = ‖Uᵀd‖² = Σ (uᵢ·d)².
-4. **Retrieve:** Elasticsearch `script_score`, exact brute force: dot product with q′ for NOT, sum of squared dot products for OR.
+3. **Compile:** concepts → subspaces → projectors. Scoring rule: **MATH.md §7 is the source of truth** (NOT applied to every term, gated OR, soft-AND combination).
+4. **Retrieve:** Elasticsearch `script_score`, exact brute force, returning 1 + s (MATH.md §8). Sent in one `_msearch` with the `must_not` keyword baseline.
 5. **Output:** ranked NYC records.
 
 ## Constraints
@@ -32,7 +32,7 @@ Dropped: the autonomous ETL agent (mapping generation, self-repair, catalog). Da
 - **Grammar (flat, no nesting):** `{positive, not: [...], any_of: [...]}`, filled by Mistral structured output.
 - **Concepts:** one embedding per concept; Mistral paraphrase → SVD subspace only if time allows.
 - **Filters:** none.
-- **Interface:** one script/notebook printing side-by-side tables.
+- **Interface:** one script/notebook printing side-by-side tables (keyword baseline vs. quantum, from one `_msearch`).
 
 ## Open (to fill in while building, not before)
 

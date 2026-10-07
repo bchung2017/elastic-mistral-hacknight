@@ -91,59 +91,110 @@ The two orders of negation differ by exactly this commutator [4]:
 
 Demo: pick two related concepts (centered cosine ~0.4–0.7), run NOT a then NOT b vs. the reverse, and show the top-10 changing. **Expect the effect to be small** unless the pair is near 45°. Print θ and the commutator norm next to the results so the size is explained, not hidden. This is the formal reason the quantum-logic lattice is non-distributive. Classic example: three distinct lines a, b, c in a plane. a AND (b OR c) = a AND plane = a, but (a AND b) OR (a AND c) = 0 OR 0 = 0 [9]. Curiosity — don't demo distributivity.
 
+
 ## 6. Born rule — and where it breaks
 
 Interpretation: P(d | q) = ⟨d|q⟩² = cos²(d, q).
 
-- **Sign-blind [7].** An anti-aligned document (cos = −0.9) gets the same "probability" as an aligned one (cos = +0.9). After centering, negative cosines are common. **Rank by signed dot product.** Use cos² only as a labeled interpretation, never for ranking.
+- **Sign-blind [7].** An anti-aligned document (cos = −0.9) gets the same "probability" as an aligned one (cos = +0.9). After centering, negative cosines are common and mean "unlike the concept." **Never rank by a squared overlap without a sign gate.** This applies to OR (§7) as well.
 - **Interference exists, but it's trivial [8].** Real amplitudes do interfere: ⟨d| αq₁ + βq₂⟩² has the signed cross term 2αβ⟨d|q₁⟩⟨d|q₂⟩. That's just squaring a linear combination. Don't sell it.
 - **No complex phase.** Real Hilbert space only. Phenomena that need complex phase have no counterpart here.
 - **No measurement dynamics.** Nothing collapses. Projection is applied to the query by choice, not by observation.
 
 Words to avoid unprompted: qubit, quantum computing, entanglement, superposition of answers, collapse, speedup.
 
-## 7. Elasticsearch implementation
+## 7. Query semantics — the scoring rule
 
-Mapping:
+Grammar (flat, emitted by Mistral structured output): `{positive?, not: [...], any_of: [...]}`. At least one of `positive` / `any_of` must be present. All vectors are centered and unit-normalized (§1); d is a document state.
+
+**Step 1 — NOT applies to everything.**
+N = orth(not concepts) via QR, Q_N = I − N Nᵀ. Both the positive query and every `any_of` concept pass through Q_N. Otherwise an OR concept entangled with a negated one re-admits it [14].
+
+**Step 2 — positive term.**
+
+    q′ = Q_N q / ‖Q_N q‖          s_pos(d) = d · q′ ∈ [−1, 1]
+
+**Step 3 — OR term (gated subspace membership).**
+
+    c̃ᵢ = Q_N cᵢ     (drop any with ‖c̃ᵢ‖ < 0.1: that concept was mostly the negated one)
+    U = orth(c̃ᵢ)    (U ⊥ N automatically, so d's negated component is ignored)
+    s_or(d) = ‖Uᵀd‖²   if Σᵢ c̃ᵢ · d > 0,   else 0        ∈ [0, 1]
+
+‖Uᵀd‖² is the Born probability that d lies in the OR-subspace. That's the right quantity for OR, but it's sign-blind [15], so the gate zeroes documents on the wrong side of the concepts. Known gap: a doc strongly aligned with c̃₁ and anti-aligned with c̃₂ can pass the gate if the sum is positive. Acceptable for MVP.
+
+Alternative if the subspace story isn't needed: signed soft-OR `max_i (c̃ᵢ · d)`. That's the fuzzy-logic (Gödel) OR, not quantum logic. Simpler, and correct on sign.
+
+**Step 4 — combine.**
+
+| Present | Score s |
+|---|---|
+| positive only | s_pos ∈ [−1, 1] |
+| any_of only | s_or ∈ [0, 1] |
+| both | max(0, s_pos) · s_or ∈ [0, 1] (soft AND, a product of probabilities) |
+
+Quantum AND isn't usable (§2), so the conjunction is classical. Say so if asked. [16] checks the ranges. `score()` in `verify_math.py` is the reference implementation.
+
+## 8. Elasticsearch implementation
+
+Retrieval is **exact brute force with `script_score`**, not kNN. At ~5k docs it's cheap; it's exact (no HNSW approximation or quantization blurring small effects), and OR can't be expressed as one kNN vector anyway.
+
+Mapping (no ANN index needed):
 
 ```json
-"vec": {
-  "type": "dense_vector",
-  "dims": 1024,
-  "similarity": "dot_product",
-  "index_options": { "type": "hnsw" }
+"vec":  { "type": "dense_vector", "dims": 1024, "index": false },
+"note": { "type": "text" }
+```
+
+Client-side, in numpy: centering, Q_N, q′, c̃ᵢ, and U. Elasticsearch receives the final vectors as params.
+
+**Script score must be ≥ 0.** Elasticsearch rejects negative `script_score` results, and s_pos is often negative on centered vectors. Return `1.0 + s`. That's monotone, so ranking is unchanged [13]. Convert back client-side: s = _score − 1.
+
+**Don't loop `dotProduct(params.u[i], 'vec')`.** I believe Painless vector functions are bound per call site to the first query vector they see, so a loop would silently score against u[0] every time. Not verified. The safe pattern is a manual dot product over `doc['vec'].vectorValue`:
+
+```painless
+float[] v = doc['vec'].vectorValue;
+double pos = 0;
+if (params.q != null) { for (int j = 0; j < v.length; j++) pos += v[j] * params.q[j]; }
+double orS = 0, gate = 0;
+for (int i = 0; i < params.u.size(); i++) {
+  double t = 0; for (int j = 0; j < v.length; j++) t += v[j] * params.u[i][j];
+  orS += t * t;
 }
+for (int i = 0; i < params.c.size(); i++) {
+  for (int j = 0; j < v.length; j++) gate += v[j] * params.c[i][j];
+}
+if (params.c.size() > 0 && gate <= 0) orS = 0;
+double s;
+if (params.q != null && params.u.size() > 0) s = Math.max(0, pos) * orS;
+else if (params.q != null) s = pos;
+else s = orS;
+return 1.0 + s;
 ```
 
-- Set `index_options` explicitly. Recent versions default to a quantized index type for large dims (I believe int8 or BBQ, depending on version — unverified). Quantization makes scores approximate, which blurs small effects like the order effect. A corpus of ~2k docs doesn't need it. Alternative: exact brute force with `script_score` and `dotProduct(params.q, 'vec')`.
-- Store centered and normalized vectors. Keep μ client-side (`.npy`), or as a doc in a `_meta` index.
-- All projection happens client-side in numpy. Elasticsearch receives the final unit `query_vector`:
+Params: `q` (q′, or null), `u` (basis U as a list of vectors), `c` (the c̃ᵢ, for the gate). Write the Painless to match `score()` and test it against `score()` on ~20 docs before trusting it.
 
-```json
-"knn": { "field": "vec", "query_vector": [...], "k": 10, "num_candidates": 200 }
-```
+**Show Elastic explicitly in the demo:** send the keyword baseline (`bool` + `must_not` on `note`) and the quantum `script_score` query in **one `_msearch`**, and display both result lists side by side.
 
-- Score conversion for float vectors: `_score = (1 + dot) / 2`, so dot = 2·_score − 1 [11].
+## 9. Evaluation (what makes "untested" into a number)
 
-## 8. Evaluation (what makes "untested" into a number)
-
-Methods compared on the same queries:
-1. baseline kNN on q
-2. kNN on q + keyword `must_not`
-3. kNN on q − 1.0·r (naive subtraction)
-4. kNN on projected q′ (single vector)
-5. kNN on projected q′ (Mistral paraphrase subspace)
+Methods compared on the same queries, all scored exactly:
+1. baseline: s_pos with no NOT (q itself)
+2. keyword: `bool` match on the positive text + `must_not` on the negated words
+3. naive subtraction: q − 1.0·r
+4. projection, single vector per concept (§7)
+5. projection, Mistral paraphrase subspace per concept (§4), if time allows
 
 Metrics for each, over top-10:
-- **leak@10:** fraction of results about the negated concept (Mistral as judge, structured yes/no)
+- **leak@10:** fraction of results about a negated concept (Mistral as judge, structured yes/no)
 - **keep@10:** fraction still about the positive concept
 
 Projection is worth claiming only if it lowers leak@10 versus `must_not` while holding keep@10. If it doesn't, say so and present it as an exact-geometry curiosity.
 
-## 9. One-slide version
+## 10. One-slide version
 
 - Documents and queries → Mistral embeddings → centered unit vectors in ℝ¹⁰²⁴ (states).
-- A concept is a subspace. NOT is the orthogonal complement: q′ = q − U Uᵀ q (Birkhoff–von Neumann 1936).
-- Elasticsearch kNN scores ⟨d|q′⟩. Every document's component along the negated concept is ignored exactly.
+- A concept is a subspace. NOT is the orthogonal complement: q′ = q − N Nᵀ q (Birkhoff–von Neumann 1936). It applies to every other term.
+- OR is gated subspace membership: ‖Uᵀd‖², zeroed on the wrong side.
+- Elasticsearch scores every document exactly (`script_score`), side by side with a `must_not` baseline in one `_msearch`.
 - Negations don't commute: ‖[P_a, P_b]‖ = |cos θ| sin θ. Show both orders.
 - Result: leak@10 and keep@10 vs. `must_not`.
