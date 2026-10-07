@@ -2,15 +2,15 @@
 
 python engine.py ingest
 python engine.py query "squirrels eating food but not pizza or bagels"
-python engine.py query --size 10 "squirrels or chipmunks, not trees"
+python engine.py query --size 10 --paraphrase "squirrels or chipmunks, not trees"
 
 Ingest embeds every story, stores centered unit vectors (MATH.md §1) and the corpus mean in a meta doc.
 Query: Mistral parses to {positive, not, any_of} -> qlogic.compile_query -> one _msearch of
 (keyword must_not baseline, quantum script_score) -> side-by-side tables.
+--paraphrase builds each NOT concept as a k-D subspace from Mistral paraphrases (MATH.md §4).
 """
 import argparse
 import os
-import sys
 
 import numpy as np
 import requests
@@ -25,6 +25,7 @@ META_ID = "__mean__"
 URL = "https://data.cityofnewyork.us/resource/gfqj-f768.json"
 EMBED_MODEL, PARSE_MODEL = "mistral-embed", "mistral-large-4"
 D = 1024
+SOURCE = ["note", "hectare", "date"]
 
 es = Elasticsearch(os.environ["ELASTIC_ENDPOINT"], api_key=os.environ["ELASTIC_API_KEY"])
 mistral = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
@@ -34,6 +35,10 @@ class Parsed(BaseModel):
     positive: str | None
     not_: list[str]
     any_of: list[str]
+
+
+class Paraphrases(BaseModel):
+    paraphrases: list[str]
 
 
 def embed(texts, batch=32):
@@ -49,16 +54,19 @@ def center(E, mu):
     return E / np.linalg.norm(E, axis=1, keepdims=True)
 
 
+def load_mu():
+    return np.array(es.get(index=INDEX, id=META_ID)["_source"]["mu"])
+
+
 def ingest():
     rows = requests.get(URL, params={"$where": "note_squirrel_park_stories IS NOT NULL", "$limit": 5000}, timeout=60).json()
     rows = [r for r in rows if r["note_squirrel_park_stories"].strip()]
     E = embed([r["note_squirrel_park_stories"] for r in rows])
     mu = E.mean(axis=0)
     V = center(E, mu)
-    cos = (E / np.linalg.norm(E, axis=1, keepdims=True)) @ (E / np.linalg.norm(E, axis=1, keepdims=True)).T
+    En = E / np.linalg.norm(E, axis=1, keepdims=True)
     off = ~np.eye(len(E), dtype=bool)
-    cc = V @ V.T
-    print(f"{len(rows)} stories | mean pairwise cosine raw {cos[off].mean():.3f} -> centered {cc[off].mean():.3f}")
+    print(f"{len(rows)} stories | mean pairwise cosine raw {(En @ En.T)[off].mean():.3f} -> centered {(V @ V.T)[off].mean():.3f}")
     if es.indices.exists(index=INDEX):
         es.indices.delete(index=INDEX)
     es.indices.create(index=INDEX, mappings={"properties": {
@@ -90,62 +98,116 @@ def parse(text):
     return r.choices[0].message.parsed
 
 
-def keyword_query(p, n):
-    must = {"match": {"note": p.positive}} if p.positive else None
-    should = [{"match": {"note": c}} for c in p.any_of]
-    b = {"must_not": [{"match": {"note": c}} for c in p.not_]}
-    if must:
-        b["must"] = [must]
-        b["should"] = should
-    else:
-        b["should"] = should
-        b["minimum_should_match"] = 1
-    return {"size": n, "query": {"bool": b}, "_source": ["note", "hectare", "date"]}
+def paraphrases(concept, n=8):
+    r = mistral.chat.parse(
+        model=PARSE_MODEL,
+        messages=[
+            {"role": "system", "content": (
+                f"Give {n} short phrases (1-3 words each) a park visitor would literally write in a field note when "
+                "mentioning this concept: plain synonyms, specific kinds, and closely associated things "
+                "(for 'dogs': dog, puppy, off-leash dog, leash, barking). Plain words only, no metaphors, no duplicates.")},
+            {"role": "user", "content": concept},
+        ],
+        response_format=Paraphrases,
+    )
+    return r.choices[0].message.parsed.paraphrases[:n]
 
 
-def quantum_query(params, n):
-    return {"size": n, "_source": ["note", "hectare", "date"], "query": {"script_score": {
-        "query": {"bool": {"must_not": [{"ids": {"values": [META_ID]}}]}},
-        "script": {"source": SCRIPT, "params": params}}}}
+def concept_subspace(concept, mu, k=3, verbose=True):
+    """Top-k left singular vectors of the centered paraphrase embeddings (MATH.md §4). Returns list of k unit vectors."""
+    phrases = [concept] + paraphrases(concept)
+    V = center(embed(phrases), mu)
+    U, S, _ = np.linalg.svd(V.T, full_matrices=False)
+    if verbose:
+        print(f"  subspace({concept!r}): {phrases[1:]}")
+        print(f"    singular values {np.round(S, 2).tolist()} -> keeping {k}")
+    return [U[:, i] for i in range(k)]
 
 
-def table(title, hits, offset):
-    print(f"\n{title}")
-    for rank, h in enumerate(hits, 1):
-        s = h["_source"]
-        note = " ".join(s["note"].split())
-        print(f"{rank:2d}  {h['_score'] - offset:7.3f}  {s.get('hectare', ''):4s} {s.get('date', ''):9s} {note[:110]}")
-    if not hits:
-        print("  (no results)")
-
-
-def query(text, size):
-    mu = np.array(es.get(index=INDEX, id=META_ID)["_source"]["mu"])
-    p = parse(text)
-    print(f"parsed: positive={p.positive!r} not={p.not_} any_of={p.any_of}")
+def concept_vectors(p, mu, paraphrase_k=0):
+    """(pos, nots, ors) as centered unit vectors. paraphrase_k > 0 expands each NOT concept into k basis vectors."""
     names = ([p.positive] if p.positive else []) + p.not_ + p.any_of
     V = center(embed(names), mu)
     it = iter(V)
     pos = next(it) if p.positive else None
     nots = [next(it) for _ in p.not_]
     ors = [next(it) for _ in p.any_of]
+    if paraphrase_k:
+        nots = [v for name in p.not_ for v in concept_subspace(name, mu, paraphrase_k)]
+    return pos, nots, ors
+
+
+def keyword_query(p, n):
+    b = {"must_not": [{"match": {"note": c}} for c in p.not_]}
+    if p.positive:
+        b["must"] = [{"match": {"note": p.positive}}]
+        b["should"] = [{"match": {"note": c}} for c in p.any_of]
+    else:
+        b["should"] = [{"match": {"note": c}} for c in p.any_of]
+        b["minimum_should_match"] = 1
+    return {"size": n, "query": {"bool": b}, "_source": SOURCE}
+
+
+def quantum_query(params, n, with_vec=False):
+    body = {"size": n, "_source": SOURCE, "query": {"script_score": {
+        "query": {"bool": {"must_not": [{"ids": {"values": [META_ID]}}]}},
+        "script": {"source": SCRIPT, "params": params}}}}
+    if with_vec:
+        body["fields"] = ["vec"]
+    return body
+
+
+def components(hit, q, u, c):
+    """Recompute s_pos and s_or client-side from the returned vector (display only; ranking is the ES score)."""
+    d = np.array(hit["fields"]["vec"])
+    s_pos = float(d @ q) if q is not None else None
+    s_or = None
+    if u:
+        s_or = float(sum((ui @ d) ** 2 for ui in u)) if max(ci @ d for ci in c) > 0 else 0.0
+    return s_pos, s_or
+
+
+def table(title, hits, offset, comps=None):
+    print(f"\n{title}")
+    for rank, h in enumerate(hits, 1):
+        s = h["_source"]
+        note = " ".join(s["note"].split())
+        extra = ""
+        if comps:
+            s_pos, s_or = comps(h)
+            extra = f"  pos {s_pos:6.3f}  or {s_or:5.3f}"
+        print(f"{rank:2d}  {h['_score'] - offset:7.3f}{extra}  {s.get('hectare', ''):4s} {s.get('date', ''):9s} {note[:100]}")
+    if not hits:
+        print("  (no results)")
+
+
+def query(text, size, paraphrase_k=0):
+    mu = load_mu()
+    p = parse(text)
+    print(f"parsed: positive={p.positive!r} not={p.not_} any_of={p.any_of}")
+    pos, nots, ors = concept_vectors(p, mu, paraphrase_k)
     if pos is not None:
         for name, r in zip(p.not_, nots):
             print(f"  q·r({p.positive!r}, {name!r}) = {pos @ r:.3f}")
-    params = script_params(*compile_query(pos, nots, ors))
-    r = es.msearch(searches=[{"index": INDEX}, keyword_query(p, size), {"index": INDEX}, quantum_query(params, size)])
+    q, u, c = compile_query(pos, nots, ors)
+    both = q is not None and u
+    r = es.msearch(searches=[{"index": INDEX}, keyword_query(p, size),
+                             {"index": INDEX}, quantum_query(script_params(q, u, c), size, with_vec=bool(both))])
     kw, qn = r["responses"]
     print(f"_msearch took {r['took']} ms")
     table(f"keyword (bool + must_not)  [BM25]  total {kw['hits']['total']['value']}", kw["hits"]["hits"], 0.0)
-    table("quantum logic (script_score, exact)  [s = _score - 1]", qn["hits"]["hits"], 1.0)
+    title = "quantum logic (script_score, exact)  [s = _score - 1" + ("; s = max(0,pos)·or]" if both else "]")
+    table(title, qn["hits"]["hits"], 1.0, comps=(lambda h: components(h, q, u, c)) if both else None)
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("ingest")
-    q = sub.add_parser("query")
-    q.add_argument("text")
-    q.add_argument("--size", type=int, default=10)
+    qp = sub.add_parser("query")
+    qp.add_argument("text")
+    qp.add_argument("--size", type=int, default=10)
+    qp.add_argument("--paraphrase", type=int, nargs="?", const=3, default=0, metavar="K",
+                    help="expand each NOT concept into a K-D paraphrase subspace (default K=3)")
     a = ap.parse_args()
-    ingest() if a.cmd == "ingest" else query(a.text, a.size)
+    ingest() if a.cmd == "ingest" else query(a.text, a.size, a.paraphrase)

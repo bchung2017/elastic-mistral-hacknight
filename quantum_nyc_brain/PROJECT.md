@@ -44,7 +44,11 @@ Dropped: the autonomous ETL agent (mapping generation, self-repair, catalog). Da
 - `smoke_test.py` and `es_checks.py` pass on the cluster (mistralai.client import OK, dims 1024, 809 squirrel stories with a note; Painless = numpy to ~1e-7, top-10 sets match, 0.4–1.2 s at 5k docs).
 - `engine.py ingest|query` built: 809 docs, mean pairwise cosine 0.784 raw -> 0.000 centered (MATH.md §1 anisotropy confirmed for mistral-embed). One `_msearch` of keyword `must_not` vs. quantum `script_score`, side-by-side tables.
 - ES 9 omits dense_vector from `_source`, so the corpus mean is stored in a non-vector `mu` float field.
-- Not done: leak@10 / keep@10 eval (MATH.md §9), paraphrase subspaces, order-effect demo.
+- `eval.py`: methods 1–5 of MATH.md §9 from one `_msearch` per query, `mistral-small-latest` as structured judge, judgments cached in `judgments.json`. Smoke-run on 1 query only; real numbers pending.
+- `order_demo.py`: sequential NOT both orders vs joint, θ, commutator norm, residuals, overlap. Effect is small as §5 predicts (8–10/10 overlap on four pairs); best pair so far `squirrels / pigeons / rats` (residual −0.16, overlap 8). Sequential residuals come out negative: the second projection overshoots into anti-a.
+- `engine.py query --paraphrase [K]`: NOT concepts as K-D SVD subspaces from Mistral paraphrases (§4). Singular values are flat after the first (1.9, 0.98, 0.89…), so K>1 may be noise; eval decides.
+- Display: for positive+any_of queries the table prints `pos` and `or` next to the product.
+- Not done: full eval run, demo query selection, filling the Open section.
 
 ## Open (to fill in while building, not before)
 
