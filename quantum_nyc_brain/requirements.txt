@@ -1,0 +1,6 @@
+elasticsearch>=9,<10
+mistralai>=3,<4
+numpy>=2
+requests>=2.31
+pydantic>=2
+flask>=3
