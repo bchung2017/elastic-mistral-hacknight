@@ -14,6 +14,8 @@ Mistral is the judge (structured yes/no per document).
 """
 import argparse
 import json
+import sys
+import time
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -45,8 +47,20 @@ class Verdicts(BaseModel):
     items: list[Verdict]
 
 
+def chat_parse(**kw):
+    """mistral.chat.parse with retry: the proxy occasionally resets long calls."""
+    for attempt in range(4):
+        try:
+            return mistral.chat.parse(**kw)
+        except Exception as e:  # httpx read/connect errors surface as several types
+            if attempt == 3:
+                raise
+            print(f"  retry {attempt + 1}: {type(e).__name__}", file=sys.stderr, flush=True)
+            time.sleep(2 ** attempt)
+
+
 def paraphrase(concept):
-    r = mistral.chat.parse(
+    r = chat_parse(
         model=PARSE_MODEL,
         messages=[
             {"role": "system", "content": f"Give {PARAPHRASES} short paraphrases, synonyms or concrete instances of the concept, 1-4 words each, as they might appear in a note about squirrels in a park."},
@@ -67,7 +81,7 @@ def judge(p, notes, model):
     out = []
     for i in range(0, len(notes), 10):
         chunk = notes[i:i + 10]
-        r = mistral.chat.parse(
+        r = chat_parse(
             model=model,
             messages=[
                 {"role": "system", "content": (
@@ -121,6 +135,7 @@ def run(p, size, judge_model):
         for h in hs:
             ids[h["_id"]] = " ".join(h["_source"]["note"].split())
     order = list(ids)
+    print(f"  judging {len(order)} docs", file=sys.stderr, flush=True)
     verdicts = dict(zip(order, judge(p, [ids[i] for i in order], judge_model)))
 
     rows = {}
